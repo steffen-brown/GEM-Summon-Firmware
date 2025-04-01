@@ -15,7 +15,7 @@ my_summon_project/
 │   ├── intersection_detector.py         # 🔀 Detects when car is at loop entrance/fork
 │   ├── intersection_decision.py         # 🧭 Chooses shortest path based on user location
 │   │
-│   ├── lane_following.py                # 🛣️ Provided (Stanley/Pure Pursuit lane tracker)
+│   ├── lane_detection.py                # 🛣️ Provided (Stanley/Pure Pursuit lane tracker)
 │   ├── summon_approach.py               # 📍 [NEW] Monitors distance to user via GNSS; stops when getting farther
 │   │
 │   ├── networking_node.py               # 🌐 Connects to Flask API for user GPS
