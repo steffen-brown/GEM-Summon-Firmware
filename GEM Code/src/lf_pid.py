@@ -4,7 +4,6 @@ import numpy as np
 from std_msgs.msg import Bool
 from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
 import time
 
 from pid_controllers import PID
@@ -76,23 +75,24 @@ class LaneFollowController:
         ###############################################################################
         
         # Subscribe to vehicle status topics
-        self.enable_sub = rospy.Subscriber("/pacmod/as_tx/enable", Bool, self.enable_callback)
+        self.enable_sub = rospy.Subscriber("/LF_OUTPUT/as_tx/enable", Bool, self.enable_callback)
         self.speed_sub = rospy.Subscriber("/pacmod/parsed_tx/vehicle_speed_rpt", VehicleSpeedRpt, self.speed_callback)
         
         # Subscribe to lane detection output
-        self.endgoal_sub = rospy.Subscriber("/lane_detection/endgoal", PoseStamped, self.endgoal_callback)
+        self.endgoal_sub = rospy.Subscriber("/LANE_DETECTION/endgoal", PoseStamped, self.endgoal_callback)
+        self.active_sub = rospy.Subscriber("/LANE_DETECTION/active", Bool, self.active_callback)
         
         ###############################################################################
         # ROS Publishers
         ###############################################################################
         
         # Publishers for vehicle control commands
-        self.enable_pub = rospy.Publisher('/pacmod/as_rx/enable', Bool, queue_size=1)
-        self.gear_pub = rospy.Publisher('/pacmod/as_rx/shift_cmd', PacmodCmd, queue_size=1)
-        self.brake_pub = rospy.Publisher('/pacmod/as_rx/brake_cmd', PacmodCmd, queue_size=1)
-        self.accel_pub = rospy.Publisher('/pacmod/as_rx/accel_cmd', PacmodCmd, queue_size=1)
-        self.turn_pub = rospy.Publisher('/pacmod/as_rx/turn_cmd', PacmodCmd, queue_size=1)
-        self.steer_pub = rospy.Publisher('/pacmod/as_rx/steer_cmd', PositionWithSpeed, queue_size=1)
+        self.enable_pub = rospy.Publisher('/LF_OUTPUT/enable', Bool, queue_size=1)
+        self.gear_pub = rospy.Publisher('/LF_OUTPUT/shift_cmd', PacmodCmd, queue_size=1)
+        self.brake_pub = rospy.Publisher('/LF_OUTPUT/brake_cmd', PacmodCmd, queue_size=1)
+        self.accel_pub = rospy.Publisher('/LF_OUTPUT/accel_cmd', PacmodCmd, queue_size=1)
+        self.turn_pub = rospy.Publisher('/LF_OUTPUT/turn_cmd', PacmodCmd, queue_size=1)
+        self.steer_pub = rospy.Publisher('/LF_OUTPUT/steer_cmd', PositionWithSpeed, queue_size=1)
 
         ###############################################################################
         # Command Messages Setup

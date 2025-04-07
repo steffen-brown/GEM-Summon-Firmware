@@ -26,7 +26,7 @@ from numpy import linalg as la
 import scipy.signal as signal
 from cv_bridge import CvBridge, CvBridgeError
 
-from filters import OnlineFilter
+import utils.filters.OnlineFilter
 
 
 # ROS Headers
@@ -36,12 +36,9 @@ import alvinxy.alvinxy as axy # Import AlvinXY transformation module
 
 # GEM Sensor Headers
 from sensor_msgs.msg import Image
-from std_msgs.msg import String, Header, Bool, Float32, Float64
-from novatel_gps_msgs.msg import NovatelPosition, NovatelXYZ, Inspva
 
 # GEM PACMod Headers
 from geometry_msgs.msg import PoseStamped
-from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, SystemRptFloat, VehicleSpeedRpt
 
 ###############################################################################
 # Lane Detection Node
@@ -125,14 +122,14 @@ class LaneNetDetector:
         ###############################################################################
         
         # Subscribe to camera feed
-        self.sub_image = rospy.Subscriber('oak/rgb/image_raw', Image, self.img_callback, queue_size=1)
+        self.sub_image = rospy.Subscriber('/zed2/zed_node/rgb/image_rect_color', Image, self.img_callback, queue_size=1)
         # note that oak/rgb/image_raw is the topic name for the GEM E4. If you run this on the E2, you will need to change the topic name
         
         # Publishers for visualization and control
-        self.pub_contrasted_image = rospy.Publisher("lane_detection/contrasted_image", Image, queue_size=1)
-        self.pub_annotated = rospy.Publisher("lane_detection/annotate", Image, queue_size=1)
-        self.pub_waypoints = rospy.Publisher("lane_detection/waypoints", Path, queue_size=1)
-        self.pub_endgoal = rospy.Publisher("lane_detection/endgoal", PoseStamped, queue_size=1)
+        self.pub_contrasted_image = rospy.Publisher("LANE_DETECTION/contrasted_image", Image, queue_size=1)
+        #self.pub_annotated = rospy.Publisher("lane_detection/annotate", Image, queue_size=1)
+        #self.pub_waypoints = rospy.Publisher("lane_detection/waypoints", Path, queue_size=1)
+        self.pub_endgoal = rospy.Publisher("LANE_DETECTION/endgoal", PoseStamped, queue_size=1)
 
     def img_callback(self, img):
         """
