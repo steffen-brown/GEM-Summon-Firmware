@@ -1,0 +1,10 @@
+<launch>
+  <!-- Drive-By-Wire Joystick -->
+  <include file="$(find basic_launch)/launch/dbw_joystick.launch" />
+
+  <!-- Sensor Initialization -->
+  <include file="$(find basic_launch)/launch/sensor_init.launch" />
+
+  <!-- Summon System (Vehicle Drivers) -->
+  <include file="$(find summon)/launch/summon_system.launch" />
+</launch>
