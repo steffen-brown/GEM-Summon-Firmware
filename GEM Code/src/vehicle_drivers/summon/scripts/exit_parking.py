@@ -106,14 +106,26 @@ class ExitParking:
         if xs.size == 0:
             rospy.logwarn_throttle(2.0, 'No lane detected in ROI')
             return
-        lane_depths = depth_roi[ys, xs]
-        lane_depths = lane_depths[np.isfinite(lane_depths) & (lane_depths > 0)]
-        if lane_depths.size == 0:
-            rospy.logwarn_throttle(2.0, 'Lane depths invalid')
+                # ── Split mask into separate blobs and keep the farthest stripe ──
+        lane_depths_farthest = None
+        num_labels, labels = cv2.connectedComponents(lane_mask)
+        for lbl in range(1, num_labels):  # label 0 = background
+            yb, xb = np.where(labels == lbl)
+            blob_depths = depth_roi[yb, xb]
+            blob_depths = blob_depths[np.isfinite(blob_depths) & (blob_depths > 0)]
+            if blob_depths.size == 0:
+                continue
+            median_d = np.median(blob_depths)
+            if (lane_depths_farthest is None) or (median_d > lane_depths_farthest):
+                lane_depths_farthest = median_d
+
+        if lane_depths_farthest is None:
+            rospy.logwarn_throttle(2.0, 'All lane blobs had invalid depth')
             return
-        dist = float(np.median(lane_depths))
+
+        dist = float(lane_depths_farthest)   # farthest stripe distance
         self.lane_dist_pub.publish(Float32(dist))
-        rospy.loginfo_throttle(1.0, f"Lane distance ≈ {dist:.2f} m")
+        rospy.loginfo_throttle(1.0, f"Farthest lane ≈ {dist:.2f} m")
 
         # Debug overlay
         debug = rgb.copy()
@@ -121,6 +133,11 @@ class ExitParking:
             cv2.circle(debug, (x, y + y0), 1, (0,255,255), -1)
         cv2.putText(debug, f"{dist:.2f} m", (30,50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
         self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, 'bgr8'))
+
+        return  # end synced_cb
+
+    # ───────── Simple lane mask helper ─────────────────────────────────────
+    def get_lane_mask(self, bgr_img):.publish(self.bridge.cv2_to_imgmsg(debug, 'bgr8'))
 
     # ───────── Simple lane mask helper ─────────────────────────────────────
     def get_lane_mask(self, bgr_img):
