@@ -28,11 +28,12 @@ from std_msgs.msg import Bool, Float32
 from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
-
-from novatel_gps_msgs.msg import NovatelPosition, NovatelXYZ, Inspva
 from sensor_msgs.msg import NavSatFix
 from septentrio_gnss_driver.msg import INSNavGeod
 
+from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
+
+from pid import PID
 
 ## (Neel :) added imports -> do we have to install these libraries??
 import math
@@ -79,7 +80,8 @@ class ExitParking:
         self.gem_enable = False
         self.pacmod_enable = False
         self.lane_distance = None
-        self.exit_direction = None
+        self.exit_direction = True
+        self.init_lane_distance = None
 
         ## (Neel :) added vars for heading based straighten lane
         self.current_heading = 0.0
@@ -89,6 +91,14 @@ class ExitParking:
         ## This is the heading that is used by the actual serpent IMU/GPS node!! This heading val should be used
         self.heading = 0.0  ## nvm dont use this anymore, i overwrote the function to write to current heading instead
 
+        self.start_time = None
+        self.curr_time = None
+        self.prev_time = None
+
+        self.speed = 0.0
+        self.desired_speed = 1
+        self.max_accel = 2.5  
+        self.pid_speed = PID(kp=0.5, ki=0.0, kd=0.1, wg=20) 
         # (Neel :) Control gain for heading correction in Phase 1
         self.kp = 0.5
 
@@ -144,20 +154,27 @@ class ExitParking:
         )
 
         # ───────── Publishers (original + new) ─────────────────────────────
-        self.enable_pub = rospy.Publisher("/EP_OUTPUT/enable", Bool, queue_size=1)
-        self.gear_pub = rospy.Publisher("/EP_OUTPUT/shift_cmd", PacmodCmd, queue_size=1)
-        self.brake_pub = rospy.Publisher(
-            "/EP_OUTPUT/brake_cmd", PacmodCmd, queue_size=1
-        )
-        self.accel_pub = rospy.Publisher(
-            "/EP_OUTPUT/accel_cmd", PacmodCmd, queue_size=1
-        )
-        self.turn_pub = rospy.Publisher("/EP_OUTPUT/turn_cmd", PacmodCmd, queue_size=1)
-        self.steer_pub = rospy.Publisher(
-            "/EP_OUTPUT/steer_cmd", PositionWithSpeed, queue_size=1
-        )
+        # self.enable_pub = rospy.Publisher("/EP_OUTPUT/enable", Bool, queue_size=1)
+        # self.gear_pub = rospy.Publisher("/EP_OUTPUT/shift_cmd", PacmodCmd, queue_size=1)
+        # self.brake_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/brake_cmd", PacmodCmd, queue_size=1
+        # )
+        # self.accel_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/accel_cmd", PacmodCmd, queue_size=1
+        # )
+        # self.turn_pub = rospy.Publisher("/EP_OUTPUT/turn_cmd", PacmodCmd, queue_size=1)
+        # self.steer_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/steer_cmd", PositionWithSpeed, queue_size=1
+        # )
 
         self.active_pub = rospy.Publisher("/EXIT_PARK/active", Bool, queue_size=1)
+
+        self.enable_pub = rospy.Publisher('/pacmod/as_rx/enable', Bool, queue_size=1)
+        self.gear_pub   = rospy.Publisher('/pacmod/as_rx/shift_cmd', PacmodCmd, queue_size=1)
+        self.brake_pub  = rospy.Publisher('/pacmod/as_rx/brake_cmd', PacmodCmd, queue_size=1)
+        self.accel_pub  = rospy.Publisher('/pacmod/as_rx/accel_cmd', PacmodCmd, queue_size=1)
+        self.turn_pub   = rospy.Publisher('/pacmod/as_rx/turn_cmd', PacmodCmd, queue_size=1)
+        self.steer_pub  = rospy.Publisher('/pacmod/as_rx/steer_cmd', PositionWithSpeed, queue_size=1)
 
         ## (Neel :) AFIK we dont need to publish the direction right... it doesnt matter
         # self.direction_pub = rospy.Publisher('/EXIT_PARK/direction', Bool, queue_size=1)
@@ -173,7 +190,9 @@ class ExitParking:
         rospy.loginfo("Received enable message")
 
     def speed_callback(self, msg):
-        rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
+        #rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
+        self.speed = round(msg.vehicle_speed, 3)
+        pass
 
     def active_callback(self, msg):
         rospy.loginfo(f"Exit park active: {msg.data}")
@@ -238,58 +257,49 @@ class ExitParking:
         rgb_roi = rgb[y0:y1]
         depth_roi = depth[y0:y1]
 
-        # Lane mask extraction tolerant to slight tilt
         lane_mask, avg_lane_angle = self.get_lane_mask(rgb_roi)
         ys, xs = np.where(lane_mask > 0)
         if xs.size == 0:
             rospy.logwarn_throttle(2.0, "No lane detected in ROI")
             return
 
-        # (Neel :) added code to compute angle of lane as well (used later for heading hold)
-        # If a lane angle was computed, determine the desired vehicle heading.
-        # The desired heading is perpendicular to the lane line.
         if avg_lane_angle is not None and self.current_heading is not None:
-            # Two possible normals: avg_lane_angle + pi/2 and avg_lane_angle - pi/2.
             option1 = avg_lane_angle + math.pi / 2
             option2 = avg_lane_angle - math.pi / 2
-            # Choose the option with the smallest angular error to current heading.
             error1 = abs(normalize_angle_error(option1 - self.current_heading))
             error2 = abs(normalize_angle_error(option2 - self.current_heading))
-            if error1 < error2:
-                self.desired_heading = option1
-            else:
-                self.desired_heading = option2
+            self.desired_heading = option1 if error1 < error2 else option2
             rospy.loginfo_throttle(
                 2.0,
                 f"Desired heading set to: {math.degrees(self.desired_heading):.2f} deg",
             )
         else:
-            # If no lane angle available, default desired heading to current heading.
             if self.current_heading is not None:
                 self.desired_heading = self.current_heading
 
-        # Process lane mask to compute lane distance as before.
-        # ── Split mask into separate blobs and keep the farthest stripe ──
-        lane_depths_farthest = None
+        # Updated: Select the **nearest** stripe (smallest depth)
+        lane_depths_nearest = None
         num_labels, labels = cv2.connectedComponents(lane_mask)
-        for lbl in range(1, num_labels):  # label 0 = background
+        for lbl in range(1, num_labels):  # Skip background (label 0)
             yb, xb = np.where(labels == lbl)
             blob_depths = depth_roi[yb, xb]
             blob_depths = blob_depths[np.isfinite(blob_depths) & (blob_depths > 0)]
             if blob_depths.size == 0:
                 continue
             median_d = np.median(blob_depths)
-            if (lane_depths_farthest is None) or (median_d > lane_depths_farthest):
-                lane_depths_farthest = median_d
+            if (lane_depths_nearest is None) or (median_d < lane_depths_nearest):
+                lane_depths_nearest = median_d
 
-        if lane_depths_farthest is None:
+        if lane_depths_nearest is None:
             rospy.logwarn_throttle(2.0, "All lane blobs had invalid depth")
             return
 
-        dist = float(lane_depths_farthest)  # farthest stripe distance
+        dist = float(lane_depths_nearest)
         self.lane_dist_pub.publish(Float32(dist))
-        self.lane_distance = dist  # store for control decisions
-        rospy.loginfo_throttle(1.0, f"Farthest lane ≈ {dist:.2f} m")
+        if self.lane_distance is None:
+            self.init_lane_distance = dist
+        self.lane_distance = dist
+        rospy.loginfo_throttle(1.0, f"Nearest lane ≈ {dist:.2f} m")
 
         # Debug overlay
         debug = rgb.copy()
@@ -297,7 +307,7 @@ class ExitParking:
             cv2.circle(debug, (x, y + y0), 1, (0, 255, 255), -1)
         cv2.putText(
             debug,
-            f"{dist:.2f} m",
+            f"Nearest: {self.init_lane_distance:.2f} m",
             (30, 50),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.2,
@@ -306,7 +316,11 @@ class ExitParking:
         )
         self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, "bgr8"))
 
-        return  # end synced_cb
+        # Show debug image in OpenCV window
+        cv2.imshow("Lane Debug View", debug)
+        cv2.waitKey(1)
+
+  # end synced_cb
 
     # ───────── Simple lane mask helper ─────────────────────────────────────
     ## Neel comment : what is this??.......... seems like it's giving a bug and is
@@ -364,12 +378,15 @@ class ExitParking:
         # For simulation, you can manually set:
         if not self.pacmod_enable:
             self.pacmod_enable = True
+            self.enable_pub.publish(Bool(data=True))
             rospy.loginfo("PACMOD interface ASSUMED ready for simulation.")
 
         ## (Neel :) lets first wait for the first image to calcualte distance from lane b4 proceeding
         while self.lane_distance is None and not rospy.is_shutdown():
             rospy.loginfo_throttle(2.0, "calculating lane distance from image data...")
             self.rate.sleep()
+
+        self.prev_time = rospy.get_time()
 
         while not rospy.is_shutdown():
             # ───────── Vehicle Initialization ─────────
@@ -407,10 +424,10 @@ class ExitParking:
             else:
                 # (Neel :) Define the threshold distance from which the car needs
                 #          to stop before making the full turn.
-                threshold = 3.2  # meters = around 10.5 feet
+                threshold = 8.5  # meters = around 10.5 feet
 
                 # ───────── Phase 1: drive forward until lane distance met ─────────
-                if self.lane_distance > threshold:
+                if self.init_lane_distance > threshold:
                     # If we have a desired_heading from lane detection and current IMU heading,
                     # compute heading error and adjust steering.
                     # if (
@@ -436,8 +453,36 @@ class ExitParking:
                     # If headings are unavailable, default to straight (0) steering.
                     self.steer_cmd.angular_position = 0.0
 
+                    self.curr_time = rospy.get_time()
+                    
+                    self.init_lane_distance -= (self.curr_time - self.prev_time)*self.speed
+                    self.prev_time = self.curr_time
+
+                    # Get current time for speed PID controller
+                    speed_time = rospy.get_time()
+                    
+                    # Calculate speed error
+                    speed_error = self.desired_speed - self.speed
+                    
+                    # Only adjust acceleration if speed error is significant
+                    if abs(speed_error) > 0.1:
+                        # Calculate acceleration using PID controller
+                        speed_output_accel = self.pid_speed.get_control(speed_time, speed_error)
+                        
+                        # Apply limits to acceleration command
+                        if speed_output_accel > self.max_accel:
+                            speed_output_accel = self.max_accel  # Cap maximum acceleration
+                        if speed_output_accel < 0.2:
+                            speed_output_accel = 0.2  # Minimum acceleration to prevent stalling
+                    else:
+                        # Maintain current speed
+                        speed_output_accel = 0.0
+                    
+                    # Update acceleration command
+                    self.accel_cmd.f64_cmd = speed_output_accel
+
                     # Continue driving forward at set acceleration.
-                    self.accel_cmd.f64_cmd = 1.5
+                    # self.accel_cmd.f64_cmd = 0.2
                     self.accel_pub.publish(self.accel_cmd)
                     self.steer_pub.publish(self.steer_cmd)
                     rospy.loginfo_throttle(
@@ -486,6 +531,7 @@ class ExitParking:
                             self.steer_cmd.angular_position = math.radians(
                                 max_steering_deg
                             )
+                            self.pub.publish(self.steer_cmd)
                             rospy.loginfo_throttle(
                                 1.0,
                                 f"Issuing max steering command: {max_steering_deg} deg",
@@ -504,9 +550,32 @@ class ExitParking:
                             )
                             break  # Exit run loop
 
+                        # Get current time for speed PID controller
+                        speed_time = rospy.get_time()
+                        
+                        # Calculate speed error
+                        speed_error = self.desired_speed - self.speed
+                        
+                        # Only adjust acceleration if speed error is significant
+                        if abs(speed_error) > 0.1:
+                            # Calculate acceleration using PID controller
+                            speed_output_accel = self.pid_speed.get_control(speed_time, speed_error)
+                            
+                            # Apply limits to acceleration command
+                            if speed_output_accel > self.max_accel:
+                                speed_output_accel = self.max_accel  # Cap maximum acceleration
+                            if speed_output_accel < 0.2:
+                                speed_output_accel = 0.2  # Minimum acceleration to prevent stalling
+                        else:
+                            # Maintain current speed
+                            speed_output_accel = 0.0
+                        
+                        # Update acceleration command
+                        self.accel_cmd.f64_cmd = speed_output_accel
+
                         # Publish the steering command and keep driving forward
                         self.steer_pub.publish(self.steer_cmd)
-                        self.accel_cmd.f64_cmd = 1.5
+                        # self.accel_cmd.f64_cmd = 0.2
                         self.accel_pub.publish(self.accel_cmd)
                     else:
                         rospy.logwarn_throttle(2.0, "Exit direction not received yet")
@@ -518,3 +587,5 @@ if __name__ == "__main__":
         node.run()
     except rospy.ROSInterruptException:
         rospy.loginfo("ExitParking node shut down.")
+    finally:
+        cv2.destroyAllWindows()
