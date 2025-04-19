@@ -40,7 +40,7 @@ class ObjectAvoidance:
 
             # Region of interest (in meters) #Note for me: check this based on what we are seeing
             # defining x as Front: 0 < x < 5, Side: -1 < y < 1, Height: -1.0 < z < 2
-            roi = (x > 0.5) & (x < 5.0) & (np.abs(y) < 1.0) & (z > -1.0) & (z < 2.0) & (ring > 4) & (ring < 12)
+            roi = (x > 0.5) & (x < 5.0) & (np.abs(y) < 1.0) & (z > -1.0) & (z < 2.0) & (ring > 62) & (ring < 128)
             #check the ring tomorrow - depending on which ones gives what generally using 16 ring config. 
 
             if np.count_nonzero(roi) > 50:  # Threshold for obstacle - saying 50 points - change this how it goes tomorrow 

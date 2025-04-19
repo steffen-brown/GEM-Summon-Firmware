@@ -17,8 +17,8 @@ class Networking:
         self.rate = rospy.Rate(10)  # 10 Hz control loop
 
         # Publishers
-        self.goal_long_pub = rospy.Publisher('/WEBAPP/goal_long', Float64, queue_size=1)
-        self.goal_lat_pub = rospy.Publisher('/WEBAPP/goal_lat', Float64, queue_size=1)
+        self.goal_long_pub = rospy.Publisher('/WEBAPP/goal_long', Float64, queue_size=1, latch = True)
+        self.goal_lat_pub = rospy.Publisher('/WEBAPP/goal_lat', Float64, queue_size=1, latch = True)
 
         # GPS
         self.gps_sub = rospy.Subscriber("/septentrio_gnss/navsatfix", NavSatFix, self.gps_callback)
@@ -34,6 +34,8 @@ class Networking:
 
         # In case we want to store the previous phone location
         self.last_phone_location = None
+
+        self.update_car_status(0)
 
     def gps_callback(self, msg):
         """
@@ -73,11 +75,18 @@ class Networking:
         """
         Send the car's status to the Summon API.
         """
+        if status == 0:
+            status_text = "IDLE"
+        if status == 1:
+            status_text = "SUMMONING"
+        if status == 2:
+            status_text = "ARRIVED"
+
         try:
             response = requests.post(
                 f"{self.API_BASE}/car-status",
                 headers=self.HEADERS,
-                json={"status": str(status)}
+                json={"status": status_text}
             )
             if response.status_code != 200:
                 rospy.logwarn(f"Error updating car status: {response.text}")
@@ -109,8 +118,12 @@ class Networking:
                 # phone_location should be a dict like {"lat": x, "lng": y}
                 goal_lat = phone_location.get("lat", 0.0)
                 goal_lng = phone_location.get("lng", 0.0)
-                self.goal_lat_pub.publish(goal_lat)
-                self.goal_long_pub.publish(goal_lng)
+            else:
+                goal_lat = 0.0
+                goal_lng = 0.0
+
+            self.goal_lat_pub.publish(goal_lat)
+            self.goal_long_pub.publish(goal_lng)
             self.rate.sleep()
 
 # ============================

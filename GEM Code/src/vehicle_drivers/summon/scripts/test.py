@@ -1,46 +1,64 @@
 #!/usr/bin/env python3
 
 import rospy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float64, Int32
 from pacmod_msgs.msg import PacmodCmd, PositionWithSpeed
+from sensor_msgs.msg import NavSatFix
 
-def active_callback(msg):
-    rospy.loginfo(f"[ACTIVE] /EXIT_PARK/active = {msg.data}")
+class TopicMonitor:
+    def __init__(self):
+        rospy.init_node('topic_monitor', anonymous=True)
 
-def enable_callback(msg):
-    rospy.loginfo(f"[PACMOD ENABLE] /pacmod/as_rx/enable = {msg.data}")
+        # List of (topic, message type)
+        topics = [
+            ('/pacmod/as_rx/enable', Bool),
+            ('/pacmod/as_rx/shift_cmd', PacmodCmd),
+            ('/pacmod/as_rx/brake_cmd', PacmodCmd),
+            ('/pacmod/as_rx/accel_cmd', PacmodCmd),
+            ('/pacmod/as_rx/turn_cmd', PacmodCmd),
+            ('/pacmod/as_rx/steer_cmd', PositionWithSpeed),
 
-def gear_callback(msg):
-    rospy.loginfo(f"[GEAR] ui16_cmd = {msg.ui16_cmd}, enable={msg.enable}, clear={msg.clear}, ignore={msg.ignore}")
+            ('/pacmod/as_tx/enable', Bool),
 
-def brake_callback(msg):
-    rospy.loginfo(f"[BRAKE] f64_cmd = {msg.f64_cmd}, enable={msg.enable}, clear={msg.clear}, ignore={msg.ignore}")
+            ('/WEBAPP/status', Int32),
+            #('/WEBAPP/goal_long', Float64),
+            #('/WEBAPP/goal_lat', Float64),
 
-def accel_callback(msg):
-    rospy.loginfo(f"[ACCEL] f64_cmd = {msg.f64_cmd}, enable={msg.enable}, clear={msg.clear}, ignore={msg.ignore}")
+            ('/septentrio_gnss/navsatfix', NavSatFix),
 
-def turn_callback(msg):
-    rospy.loginfo(f"[TURN SIGNAL] ui16_cmd = {msg.ui16_cmd}, enable={msg.enable}, clear={msg.clear}, ignore={msg.ignore}")
+            ('/LANE_DETECTION/active', Bool),
+            ('/EXIT_PARK/active', Bool),
 
-def steer_callback(msg):
-    rospy.loginfo(f"[STEER] angular_position = {msg.angular_position}")
+            ('/OBJECT_DETECTION/stop', Bool),
+            ('/OBJECT_DETECTION/restart', Bool),
 
-def listener():
-    rospy.init_node('pacmod_debug_listener', anonymous=True)
+            ('/LF_OUTPUT/enable', Bool),
+            ('/LF_OUTPUT/shift_cmd', PacmodCmd),
+            ('/LF_OUTPUT/brake_cmd', PacmodCmd),
+            ('/LF_OUTPUT/accel_cmd', PacmodCmd),
+            ('/LF_OUTPUT/turn_cmd', PacmodCmd),
+            ('/LF_OUTPUT/steer_cmd', PositionWithSpeed),
 
-    rospy.Subscriber("/EXIT_PARK/active", Bool, active_callback)
-    rospy.Subscriber("/pacmod/as_rx/enable", Bool, enable_callback)
-    rospy.Subscriber("/pacmod/as_rx/shift_cmd", PacmodCmd, gear_callback)
-    rospy.Subscriber("/pacmod/as_rx/brake_cmd", PacmodCmd, brake_callback)
-    rospy.Subscriber("/pacmod/as_rx/accel_cmd", PacmodCmd, accel_callback)
-    rospy.Subscriber("/pacmod/as_rx/turn_cmd", PacmodCmd, turn_callback)
-    rospy.Subscriber("/pacmod/as_rx/steer_cmd", PositionWithSpeed, steer_callback)
+            ('/EP_OUTPUT/enable', Bool),
+            ('/EP_OUTPUT/shift_cmd', PacmodCmd),
+            ('/EP_OUTPUT/brake_cmd', PacmodCmd),
+            ('/EP_OUTPUT/accel_cmd', PacmodCmd),
+            ('/EP_OUTPUT/turn_cmd', PacmodCmd),
+            ('/EP_OUTPUT/steer_cmd', PositionWithSpeed),
+        ]
 
-    rospy.loginfo("Listening for PACMOD command messages...")
-    rospy.spin()
+        # Create all subscribers dynamically
+        for topic, msg_type in topics:
+            rospy.Subscriber(topic, msg_type, self.generic_callback, callback_args=topic)
+
+        rospy.loginfo("Topic monitor is running...")
+        rospy.spin()
+
+    def generic_callback(self, msg, topic_name):
+        rospy.loginfo(f"[{topic_name}] → {msg}")
 
 if __name__ == '__main__':
     try:
-        listener()
+        TopicMonitor()
     except rospy.ROSInterruptException:
         pass
