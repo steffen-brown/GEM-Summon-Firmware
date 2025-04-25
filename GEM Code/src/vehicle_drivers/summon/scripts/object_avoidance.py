@@ -16,8 +16,8 @@ class ObjectAvoidance:
         self.obstacle_detected = False
         
         # Publishers
-        self.stop_pub = rospy.Publisher('/OBJECT_DETECTION/stop', Bool, queue_size=1)
-        self.restart_pub = rospy.Publisher('/OBJECT_DETECTION/restart', Bool, queue_size=1)
+        self.stop_pub = rospy.Publisher('/OBJECT_DETECTION/stop', Bool, queue_size=1, latch = True)
+        self.restart_pub = rospy.Publisher('/OBJECT_DETECTION/restart', Bool, queue_size=1, latch = True)
 
         # Subscriber
         self.lidar_points_sub = rospy.Subscriber('/ouster/points', PointCloud2, self.lidar_callback)

@@ -127,6 +127,11 @@ class LaneFollowController:
         self.steer_cmd.angular_position = 0.0  # Steering angle in radians
         self.steer_cmd.angular_velocity_limit = 3.5  # Maximum steering rate
 
+        self.module_active = False
+
+    def active_callback(self, msg):
+        self.module_active = msg.data
+
     def enable_callback(self, msg):
         """
         Callback for PACMOD enable status messages.
@@ -206,7 +211,7 @@ class LaneFollowController:
         
         The loop runs at the rate specified by self.rate (10 Hz)
         """
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and self.module_active:
             ###############################################################################
             # Vehicle Initialization
             ###############################################################################

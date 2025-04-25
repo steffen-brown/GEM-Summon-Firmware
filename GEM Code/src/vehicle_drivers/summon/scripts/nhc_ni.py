@@ -169,6 +169,25 @@ class ExitParking:
             "/EXIT_PARK/direction", Bool, self.exit_direction_callback
         )
 
+        # self.enable_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/enable", Bool, queue_size=1, latch=True
+        # )
+        # self.gear_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/shift_cmd", PacmodCmd, queue_size=1, latch=True
+        # )
+        # self.brake_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/brake_cmd", PacmodCmd, queue_size=1, latch=True
+        # )
+        # self.accel_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/accel_cmd", PacmodCmd, queue_size=1, latch=True
+        # )
+        # self.turn_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/turn_cmd", PacmodCmd, queue_size=1, latch=True
+        # )
+        # self.steer_pub = rospy.Publisher(
+        #     "/EP_OUTPUT/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
+        # )
+
         # ───────── New: synchronised RGB + depth subscriber ───────────────
         rgb_sub = Subscriber(self.rgb_topic, Image)
         depth_sub = Subscriber(self.depth_topic, Image)
@@ -203,6 +222,8 @@ class ExitParking:
         )
         self.debug_pub = rospy.Publisher("/EXIT_PARK/lane_debug", Image, queue_size=1)
 
+        self.module_active = False
+
     # ───────── Original callbacks (unchanged) ──────────────────────────────
     def enable_callback(self, msg):
         rospy.loginfo("Received enable message")
@@ -212,6 +233,7 @@ class ExitParking:
         self.speed = round(msg.vehicle_speed, 3)
 
     def active_callback(self, msg):
+        self.module_active = msg.data
         rospy.loginfo(f"Exit park active: {msg.data}")
 
     def contrasted_image_callback(self, msg):
@@ -580,6 +602,9 @@ class ExitParking:
 
     # ───────── Run loop ────────────────────────────────────────────────────
     def run(self):
+        while (self.module_active == False):
+            pass
+
         rospy.loginfo("ExitParking node with lane distance extension running …")
 
         ##  ******* Initialize PACMOD if not alr inited ******
