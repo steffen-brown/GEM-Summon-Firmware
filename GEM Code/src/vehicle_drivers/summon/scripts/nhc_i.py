@@ -103,18 +103,19 @@ class ExitParking:
 
         # ───────── Variables for heading-based realignment and turning ─────────
         self.current_heading = (
-            None  # Current vehicle heading (from INS/IMU), in radians
+            None  # Current vehicle heading (from INS/IMU), in degrees from 0-360
         )
         self.desired_heading = None  # Desired heading (perpendicular to lane)
         self.turn_start_heading = None  # Recorded heading when beginning the turn
         self.turning = False  # Flag indicating if turn maneuver has started
         self.init_pos = None
+        self.wheelbase = 1.75  # meters
 
         self.prev_time = None
 
         # ───────── Variables for Speed Control ─────────
         self.speed = 0.0
-        self.desired_speed = .75  # m/s, reference speed
+        self.desired_speed = 0.75  # m/s, reference speed
         self.max_accel = 0.48  # % of acceleration
         self.pid_speed = PID(kp=0.5, ki=0.0, kd=0.1, wg=20)
         self.speed_filter = OnlineFilter(1.2, 30, 4)
@@ -178,7 +179,9 @@ class ExitParking:
         self.sync.registerCallback(self.synced_cb)
 
         # ───────── Publishers (original + new) ─────────────────────────────
-        self.enable_pub = rospy.Publisher("/pacmod/as_rx/enable", Bool, queue_size=1, latch=True)
+        self.enable_pub = rospy.Publisher(
+            "/pacmod/as_rx/enable", Bool, queue_size=1, latch=True
+        )
         self.gear_pub = rospy.Publisher(
             "/pacmod/as_rx/shift_cmd", PacmodCmd, queue_size=1, latch=True
         )
@@ -195,7 +198,9 @@ class ExitParking:
             "/pacmod/as_rx/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
         )
 
-        self.active_pub = rospy.Publisher("/EXIT_PARK/active", Bool, queue_size=1, latch=True)
+        self.active_pub = rospy.Publisher(
+            "/EXIT_PARK/active", Bool, queue_size=1, latch=True
+        )
 
         # New outputs for lane distance and debug image
         self.lane_dist_pub = rospy.Publisher(
@@ -205,13 +210,12 @@ class ExitParking:
 
         self.steer_cmd.angular_velocity_limit = 3.5
 
-
     # ───────── Original callbacks (unchanged) ──────────────────────────────
     def enable_callback(self, msg):
         rospy.loginfo("Received enable message")
 
     def speed_callback(self, msg):
-        #rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
+        # rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
         self.speed = round(msg.vehicle_speed, 3)
 
     def active_callback(self, msg):
@@ -241,7 +245,7 @@ class ExitParking:
         self.lat = round(msg.latitude, 6)
         self.lon = round(msg.longitude, 6)
 
-    # this function basiaclly converts from 0-360 to -180 to +180
+    # this function basiaclly converts from 0-360 to -180 to +180 (OUTPUT IS RADIANS)
     def heading_to_yaw(self, heading_curr):
         if heading_curr >= 270 and heading_curr < 360:
             yaw_curr = np.radians(450 - heading_curr)
@@ -281,20 +285,22 @@ class ExitParking:
             option1 = avg_lane_angle + math.pi / 2
             option2 = avg_lane_angle - math.pi / 2
             # Choose the option with the smallest angular error to current heading.
-            error1 = abs(normalize_angle_error(option1 - self.current_heading))
-            error2 = abs(normalize_angle_error(option2 - self.current_heading))
+            current_heading_rad = math.radians(self.current_heading)
+            error1 = abs(normalize_angle_error(option1 - current_heading_rad))
+            error2 = abs(normalize_angle_error(option2 - current_heading_rad))
+            ## error1 and error2 gives output in radians
             if error1 < error2:
-                self.desired_heading = option1
+                self.desired_heading = math.degrees(option1)
             else:
-                self.desired_heading = option2
+                self.desired_heading = math.degrees(option2)
             rospy.loginfo_throttle(
                 2.0,
-                f"Desired heading set to: {math.degrees(self.desired_heading):.2f} deg",
+                f"Desired heading set to: {(self.desired_heading):.2f} deg",
             )
         else:
             # If no lane angle available, default desired heading to current heading.
             if self.current_heading is not None:
-                self.desired_heading = self.current_heading
+                self.desired_heading = self.current_heading  ## this is alr in degrees
 
         # Process lane mask blobs to compute the nearest lane distance
         # ── Split mask into separate blobs and keep the nearest stripe ──
@@ -321,10 +327,9 @@ class ExitParking:
         # Extract data for second-nearest
         lane_depths_second_nearest, best_label, xb, yb = lane_blobs[1]
 
+        dist = float(lane_depths_second_nearest)
 
-        dist = float(lane_depths_second_nearest) 
-        
-        horizontal_distance = dist # nearest stripe distance
+        horizontal_distance = dist  # nearest stripe distance
 
         rospy.loginfo(f"Final horizontal lane distance = {horizontal_distance:.2f} m")
 
@@ -354,10 +359,9 @@ class ExitParking:
             self.lane_distance = (
                 ALPHA * horizontal_distance + (1 - ALPHA) * self.lane_distance
             )
-        
+
         rospy.loginfo(f"Final horizontal lane distance = {self.lane_distance:.2f} m")
-        
-        
+
         # Publish the horizontal lane distance
         self.lane_dist_pub.publish(Float32(self.lane_distance))
         ## inits the lane distance
@@ -514,9 +518,11 @@ class ExitParking:
         if self.current_heading is not None and self.desired_heading is not None:
             ## 'L' Represents the distance from the goal point to the current point
             L = self.updated_lane_distance
-            curr_yaw = self.heading_to_yaw(self.heading)
+            curr_yaw = self.heading_to_yaw(self.heading)  ## output in radians
             # find the curvature and the angle
-            alpha = self.heading_to_yaw(self.desired_heading) - curr_yaw
+            alpha = (
+                self.heading_to_yaw(self.desired_heading) - curr_yaw
+            )  ## output in radians
 
             # ----------------- tuning this part as needed -----------------
             k = 0.41
@@ -552,18 +558,21 @@ class ExitParking:
             else:
                 self.turn_start_heading = self.current_heading
                 rospy.loginfo(
-                    f"Starting turn. Recorded heading: {math.degrees(self.turn_start_heading):.2f} deg"
+                    f"Starting turn. Recorded heading: {(self.turn_start_heading):.2f} deg"
                 )
 
         # Compute heading change if current heading is available
         heading_change = 0.0
         if self.current_heading is not None and self.turn_start_heading is not None:
-            heading_change = angle_diff(self.current_heading, self.turn_start_heading)
+            heading_change = angle_diff(
+                math.radians(self.current_heading),
+                math.radians(self.turn_start_heading),
+            )  ## output in radians
             rospy.loginfo_throttle(
                 1.0,
                 f"Turning... Heading change: {math.degrees(heading_change):.2f} deg",
             )
-        return heading_change
+        return math.degrees(heading_change)  ## output in degrees
 
     def PACMON_setup(self):
         # Configure vehicle for autonomous mode
@@ -627,11 +636,11 @@ class ExitParking:
                 # Enable vehicle if PACMOD is ready but vehicle not yet enabled
                 if self.pacmod_enable:
                     self.PACMON_setup()
-            curr_time = rospy.get_time()
+            # curr_time = rospy.get_time()
 
-            self.updated_lane_distance -= (curr_time - self.prev_time) * self.speed
+            # self.updated_lane_distance -= (curr_time - self.prev_time) * self.speed
 
-            self.prev_time = curr_time
+            # self.prev_time = curr_time
 
             ## ****************** Tunable Parameter ***************************
             # (Neel :) Define the threshold distance from which the car needs
@@ -652,7 +661,11 @@ class ExitParking:
                 output_accel = self.speed_control()
 
                 ## *************** Integrate for Δ Distance ****************
+                curr_time = rospy.get_time()
 
+                self.updated_lane_distance -= (curr_time - self.prev_time) * self.speed
+
+                self.prev_time = curr_time
                 ## *************** Update Commands ****************
                 # Update acceleration command
                 self.accel_cmd.f64_cmd = output_accel
@@ -681,31 +694,32 @@ class ExitParking:
                     max_steering_deg = self.front2steer(max_steering_deg)
 
                     ## *************** Update the heading change ****************
-                    heading_change = self.log_heading()
+                    heading_change = self.log_heading()  ## output in degrees
 
-                    # If the cumulative heading change is less than 90° (pi/2 radians),
+                    # If the cumulative heading change is less than 90°,
                     # maintain maximum steering; otherwise, set steering to zero.
                     ## *************** Apply Max Turning ****************
-                    if heading_change < (math.pi / 2):
+                    if heading_change < (90):
                         self.steer_cmd.angular_position = math.radians(max_steering_deg)
                         rospy.loginfo_throttle(
                             1.0,
                             f"Issuing max steering command: {max_steering_deg} deg",
                         )
+                        self.turn_signal(max_steering_deg)
 
-                    ## we have reached the end of the 90 deg turn -- successfully exited lane!
-                    ## ******** Finished Turning; Apply Zero Steering & Exit Loop *********
-                    # else:
-                    #     self.steer_cmd.angular_position = 0.0
-                    #     rospy.loginfo(
-                    #         "90 degree turn accomplished. Steering set to zero."
-                    #     )
-                    #     # Publish zero steering to confirm command
-                    #     self.steer_pub.publish(self.steer_cmd)
-                    #     # Phase 3: Disable exit parking mode and hand over control
-                    #     self.active_pub.publish(Bool(False))
-                    #     rospy.loginfo("Exit parking complete. PID control activated.")
-                    #     break  # Exit run loop
+                    # we have reached the end of the 90 deg turn -- successfully exited lane!
+                    # ******** Finished Turning; Apply Zero Steering & Exit Loop *********
+                    else:
+                        self.steer_cmd.angular_position = 0.0
+                        rospy.loginfo(
+                            "90 degree turn accomplished. Steering set to zero."
+                        )
+                        # Publish zero steering to confirm command
+                        self.steer_pub.publish(self.steer_cmd)
+                        # Phase 3: Disable exit parking mode and hand over control
+                        self.active_pub.publish(Bool(False))
+                        rospy.loginfo("Exit parking complete. PID control activated.")
+                        break  # Exit run loop
 
                     ## *************** Speed Control ***1*************
                     output_accel = self.speed_control()

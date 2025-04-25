@@ -87,7 +87,7 @@ class ExitParking:
         self.slope_thresh = rospy.get_param(
             "~slope_thresh", 0.4
         )  # |slope| <= 0.4 → ~22°
-        self.roi_top_frac = rospy.get_param("~roi_top_frac", 0.50)
+        self.roi_top_frac = rospy.get_param("~roi_top_frac", 0.30)
         self.roi_bot_frac = rospy.get_param("~roi_bot_frac", 0.90)
 
         # ───────── Additional variables for parking logic ─────────
@@ -96,25 +96,26 @@ class ExitParking:
         self.lane_distance = None  # Latest computed lane distance (meters)
 
         ## (Neel :) Set this to true for right turn, false for left turn *****
-        self.exit_direction = None
+        self.exit_direction = False
 
         self.init_lane_distance = None
         self.updated_lane_distance = None
 
         # ───────── Variables for heading-based realignment and turning ─────────
         self.current_heading = (
-            None  # Current vehicle heading (from INS/IMU), in radians
+            None  # Current vehicle heading (from INS/IMU), in degrees from 0-360
         )
         self.desired_heading = None  # Desired heading (perpendicular to lane)
         self.turn_start_heading = None  # Recorded heading when beginning the turn
         self.turning = False  # Flag indicating if turn maneuver has started
         self.init_pos = None
+        self.wheelbase = 1.75  # meters
 
         self.prev_time = None
 
         # ───────── Variables for Speed Control ─────────
         self.speed = 0.0
-        self.desired_speed = 1.5  # m/s, reference speed
+        self.desired_speed = 0.75  # m/s, reference speed
         self.max_accel = 0.48  # % of acceleration
         self.pid_speed = PID(kp=0.5, ki=0.0, kd=0.1, wg=20)
         self.speed_filter = OnlineFilter(1.2, 30, 4)
@@ -178,7 +179,9 @@ class ExitParking:
         self.sync.registerCallback(self.synced_cb)
 
         # ───────── Publishers (original + new) ─────────────────────────────
-        self.enable_pub = rospy.Publisher("/pacmod/as_rx/enable", Bool, queue_size=1)
+        self.enable_pub = rospy.Publisher(
+            "/pacmod/as_rx/enable", Bool, queue_size=1, latch=True
+        )
         self.gear_pub = rospy.Publisher(
             "/pacmod/as_rx/shift_cmd", PacmodCmd, queue_size=1, latch=True
         )
@@ -195,20 +198,24 @@ class ExitParking:
             "/pacmod/as_rx/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
         )
 
-        self.active_pub = rospy.Publisher("/EXIT_PARK/active", Bool, queue_size=1, latch=True)
+        self.active_pub = rospy.Publisher(
+            "/EXIT_PARK/active", Bool, queue_size=1, latch=True
+        )
 
         # New outputs for lane distance and debug image
         self.lane_dist_pub = rospy.Publisher(
             "/EXIT_PARK/lane_distance", Float32, queue_size=1
         )
-        self.debug_pub = rospy.Publisher("/EXIT_PARK/lane_debug", Image, queue_size=1, latch=True)
+        self.debug_pub = rospy.Publisher("/EXIT_PARK/lane_debug", Image, queue_size=1)
+
+        self.steer_cmd.angular_velocity_limit = 3.5
 
     # ───────── Original callbacks (unchanged) ──────────────────────────────
     def enable_callback(self, msg):
         rospy.loginfo("Received enable message")
 
     def speed_callback(self, msg):
-        rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
+        # rospy.loginfo(f"Vehicle speed: {msg.vehicle_speed:.2f} m/s")
         self.speed = round(msg.vehicle_speed, 3)
 
     def active_callback(self, msg):
@@ -238,7 +245,7 @@ class ExitParking:
         self.lat = round(msg.latitude, 6)
         self.lon = round(msg.longitude, 6)
 
-    # this function basiaclly converts from 0-360 to -180 to +180
+    # this function basiaclly converts from 0-360 to -180 to +180 (OUTPUT IS RADIANS)
     def heading_to_yaw(self, heading_curr):
         if heading_curr >= 270 and heading_curr < 360:
             yaw_curr = np.radians(450 - heading_curr)
@@ -246,20 +253,13 @@ class ExitParking:
             yaw_curr = np.radians(90 - heading_curr)
         return yaw_curr
 
-    def yaw_to_heading(self, yaw_rad):
-        """Convert a yaw angle (radians, –π…π) back into a 0–360° heading."""
-        deg = math.degrees(yaw_rad)
-        if deg > 90:
-            heading = 450 - deg  # covers the original 270–360° → 180…90° yaw range
-        else:
-            heading = 90 - deg  # covers 0–270° → 90…–180° yaw range
-        return heading % 360
-
     # ───────── New synchronised RGB+Depth callback ────────────────────────
     def synced_cb(self, rgb_msg: Image, depth_msg: Image):
+        rospy.loginfo("Entered synced_cb() callback — RGB + Depth received.")
         # Convert ROS messages to OpenCV images
         rgb = self.bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
         depth = self.bridge.imgmsg_to_cv2(depth_msg, "passthrough")
+        rospy.loginfo("Converted RGB and Depth to OpenCV format.")
         if depth_msg.encoding == "16UC1":
             depth = depth.astype(np.float32) / 1000.0
 
@@ -285,66 +285,73 @@ class ExitParking:
             option1 = avg_lane_angle + math.pi / 2
             option2 = avg_lane_angle - math.pi / 2
             # Choose the option with the smallest angular error to current heading.
-            error1 = abs(
-                normalize_angle_error(
-                    option1 - self.heading_to_yaw(self.current_heading)
-                )
-            )
-            error2 = abs(
-                normalize_angle_error(
-                    option2 - self.heading_to_yaw(self.current_heading)
-                )
-            )
-
+            current_heading_rad = math.radians(self.current_heading)
+            error1 = abs(normalize_angle_error(option1 - current_heading_rad))
+            error2 = abs(normalize_angle_error(option2 - current_heading_rad))
+            ## error1 and error2 gives output in radians
             if error1 < error2:
-                self.desired_heading = self.yaw_to_heading(option1)
+                self.desired_heading = math.degrees(option1)
             else:
-                self.desired_heading = self.yaw_to_heading(option2)
+                self.desired_heading = math.degrees(option2)
             rospy.loginfo_throttle(
                 2.0,
-                f"Desired heading set to: {math.degrees(self.desired_heading):.2f} deg",
+                f"Desired heading set to: {(self.desired_heading):.2f} deg",
             )
         else:
             # If no lane angle available, default desired heading to current heading.
             if self.current_heading is not None:
-                self.desired_heading = self.current_heading
+                self.desired_heading = self.current_heading  ## this is alr in degrees
 
         # Process lane mask blobs to compute the nearest lane distance
         # ── Split mask into separate blobs and keep the nearest stripe ──
-        lane_depths_nearest = None
-        best_label = None
+        lane_blobs = []
         num_labels, labels = cv2.connectedComponents(lane_mask)
-        for lbl in range(1, num_labels):  # label 0 = background
+
+        for lbl in range(1, num_labels):  # label 0 is background
             yb, xb = np.where(labels == lbl)
             blob_depths = depth_roi[yb, xb]
             blob_depths = blob_depths[np.isfinite(blob_depths) & (blob_depths > 0)]
             if blob_depths.size == 0:
                 continue
             median_d = np.median(blob_depths)
-            if (lane_depths_nearest is None) or (median_d < lane_depths_nearest):
-                lane_depths_nearest = median_d
-                best_label = lbl
+            lane_blobs.append((median_d, lbl, xb, yb))
 
-        if lane_depths_nearest is None:
-            rospy.logwarn_throttle(2.0, "All lane blobs had invalid depth")
+        # Sort blobs by depth
+        lane_blobs.sort(key=lambda tup: tup[0])
+
+        # Use second-nearest if available
+        if len(lane_blobs) < 2:
+            rospy.logwarn("Fewer than 2 valid lane blobs found — skipping")
             return
 
-        dist = float(lane_depths_nearest)  # nearest stripe distance
+        # Extract data for second-nearest
+        lane_depths_second_nearest, best_label, xb, yb = lane_blobs[1]
+
+        dist = float(lane_depths_second_nearest)
+
+        horizontal_distance = dist  # nearest stripe distance
+
+        rospy.loginfo(f"Final horizontal lane distance = {horizontal_distance:.2f} m")
 
         # Convert to horizontal (ground) distance:
-        CAMERA_HEIGHT = 1.80  # meters (camera mounting height)
-        if dist > CAMERA_HEIGHT:
-            horizontal_distance = math.sqrt(dist**2 - CAMERA_HEIGHT**2)
-            rospy.loginfo_throttle(
-                1.0, f"Lane horizontal distance ≈ {horizontal_distance:.2f} m"
-            )
-        else:
-            rospy.logwarn_throttle(
-                1.0, "Invalid depth: lane is below camera or distorted"
-            )
-            return
+        # CAMERA_HEIGHT = 1.80  # meters (camera mounting height)
+        # if dist > CAMERA_HEIGHT:
+        #     horizontal_distance = math.sqrt(dist**2 - CAMERA_HEIGHT**2)
+        #     rospy.loginfo_throttle(
+        #         1.0, f"Lane horizontal distance ≈ {horizontal_distance:.2f} m"
+        #     )
+        # else:
+        #     rospy.logwarn_throttle(
+        #         1.0, "Invalid depth: lane is below camera or distorted"
+        #     )
+        #     return
 
         # Optional low-pass filtering for stability (smoothing factor ALPHA)
+        if self.init_lane_distance is None:
+            self.init_lane_distance = horizontal_distance
+
+        if self.updated_lane_distance is None:
+            self.updated_lane_distance = horizontal_distance
         ALPHA = 0.2
         if self.lane_distance is None:
             self.lane_distance = horizontal_distance
@@ -352,6 +359,8 @@ class ExitParking:
             self.lane_distance = (
                 ALPHA * horizontal_distance + (1 - ALPHA) * self.lane_distance
             )
+
+        rospy.loginfo(f"Final horizontal lane distance = {self.lane_distance:.2f} m")
 
         # Publish the horizontal lane distance
         self.lane_dist_pub.publish(Float32(self.lane_distance))
@@ -362,10 +371,8 @@ class ExitParking:
         debug = rgb.copy()
 
         # Draw the nearest (best) lane blob in yellow
-        if best_label is not None:
-            yb, xb = np.where(labels == best_label)
-            for px, py in zip(xb, yb):
-                cv2.circle(debug, (px, py + y0), 1, (0, 255, 255), -1)
+        for px, py in zip(xb, yb):
+            cv2.circle(debug, (px, py + y0), 1, (0, 255, 255), -1)
 
         # Annotate distances
         cv2.putText(
@@ -397,9 +404,11 @@ class ExitParking:
         )
 
         # Publish and display
+        rospy.loginfo("Attempting to show debug image now...")
         self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, "bgr8"))
         cv2.imshow("Lane Debug View", debug)
         cv2.waitKey(1)
+        rospy.loginfo("imshow() & waitKey() done")
 
         return  # end synced_cb
 
@@ -509,9 +518,11 @@ class ExitParking:
         if self.current_heading is not None and self.desired_heading is not None:
             ## 'L' Represents the distance from the goal point to the current point
             L = self.updated_lane_distance
-            curr_yaw = self.heading_to_yaw(self.heading)
+            curr_yaw = self.heading_to_yaw(self.current_heading)  ## output in radians
             # find the curvature and the angle
-            alpha = self.heading_to_yaw(self.desired_heading) - curr_yaw
+            alpha = (
+                self.heading_to_yaw(self.desired_heading) - curr_yaw
+            )  ## output in radians
 
             # ----------------- tuning this part as needed -----------------
             k = 0.41
@@ -547,18 +558,21 @@ class ExitParking:
             else:
                 self.turn_start_heading = self.current_heading
                 rospy.loginfo(
-                    f"Starting turn. Recorded heading: {math.degrees(self.turn_start_heading):.2f} deg"
+                    f"Starting turn. Recorded heading: {(self.turn_start_heading):.2f} deg"
                 )
 
         # Compute heading change if current heading is available
         heading_change = 0.0
         if self.current_heading is not None and self.turn_start_heading is not None:
-            heading_change = angle_diff(self.current_heading, self.turn_start_heading)
+            heading_change = angle_diff(
+                math.radians(self.current_heading),
+                math.radians(self.turn_start_heading),
+            )  ## output in radians
             rospy.loginfo_throttle(
                 1.0,
                 f"Turning... Heading change: {math.degrees(heading_change):.2f} deg",
             )
-        return heading_change
+        return math.degrees(heading_change)  ## output in degrees
 
     def PACMON_setup(self):
         # Configure vehicle for autonomous mode
@@ -595,6 +609,8 @@ class ExitParking:
         ##  ******* Initialize PACMOD if not alr inited ******
         if not self.pacmod_enable:
             self.pacmod_enable = True
+            self.gear_cmd.ui16_cmd = 3  # Forward gear
+            self.gear_pub.publish(self.gear_cmd)
             self.enable_pub.publish(Bool(data=True))
             rospy.loginfo("PACMOD interface ready for simulation.")
         ##  ***************************************************
@@ -620,11 +636,16 @@ class ExitParking:
                 # Enable vehicle if PACMOD is ready but vehicle not yet enabled
                 if self.pacmod_enable:
                     self.PACMON_setup()
+            # curr_time = rospy.get_time()
+
+            # self.updated_lane_distance -= (curr_time - self.prev_time) * self.speed
+
+            # self.prev_time = curr_time
 
             ## ****************** Tunable Parameter ***************************
             # (Neel :) Define the threshold distance from which the car needs
             #          to stop before making the full turn.
-            threshold = 4.2  # meters = around 10.5 feet
+            threshold = 6  # meters = around 10.5 feet
 
             if self.updated_lane_distance is None:
                 self.updated_lane_distance = self.lane_distance
@@ -644,7 +665,6 @@ class ExitParking:
                 self.updated_lane_distance -= (curr_time - self.prev_time) * self.speed
 
                 self.prev_time = curr_time
-
                 ## *************** Update Commands ****************
                 # Update acceleration command
                 self.accel_cmd.f64_cmd = output_accel
@@ -673,20 +693,21 @@ class ExitParking:
                     max_steering_deg = self.front2steer(max_steering_deg)
 
                     ## *************** Update the heading change ****************
-                    heading_change = self.log_heading()
+                    heading_change = self.log_heading()  ## output in degrees
 
-                    # If the cumulative heading change is less than 90° (pi/2 radians),
+                    # If the cumulative heading change is less than 90°,
                     # maintain maximum steering; otherwise, set steering to zero.
                     ## *************** Apply Max Turning ****************
-                    if heading_change < (math.pi / 2):
+                    if heading_change < (90):
                         self.steer_cmd.angular_position = math.radians(max_steering_deg)
                         rospy.loginfo_throttle(
                             1.0,
                             f"Issuing max steering command: {max_steering_deg} deg",
                         )
+                        self.turn_signal(max_steering_deg)
 
-                    ## we have reached the end of the 90 deg turn -- successfully exited lane!
-                    ## ******** Finished Turning; Apply Zero Steering & Exit Loop *********
+                    # we have reached the end of the 90 deg turn -- successfully exited lane!
+                    # ******** Finished Turning; Apply Zero Steering & Exit Loop *********
                     else:
                         self.steer_cmd.angular_position = 0.0
                         rospy.loginfo(
