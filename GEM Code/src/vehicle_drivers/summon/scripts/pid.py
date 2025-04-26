@@ -25,7 +25,6 @@ import scipy.signal as signal
 
 # ROS Headers
 import rospy
-import alvinxy.alvinxy as axy # Import AlvinXY transformation module
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 

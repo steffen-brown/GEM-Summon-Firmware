@@ -12,6 +12,9 @@ class SummonManager:
     def __init__(self):
         rospy.init_node('summon_manager', anonymous=True)
 
+        # FSM States: 0 = IDLE, 1 = EXIT, 2 = LINE FOLLOW
+        self.fsm_state = 0
+
         # PACMod command publishers
         self.enable_pub = rospy.Publisher('/pacmod/as_rx/enable', Bool, queue_size=1, latch=True)
         self.gear_pub   = rospy.Publisher('/pacmod/as_rx/shift_cmd', PacmodCmd, queue_size=1, latch=True)
@@ -79,9 +82,6 @@ class SummonManager:
         self.ep_turn_msg   = PacmodCmd()
         self.ep_steer_msg  = PositionWithSpeed()
 
-        # FSM States: 0 = IDLE, 1 = EXIT, 2 = LINE FOLLOW
-        self.fsm_state = 0
-
         # heading (yaw) from /insnavgeod and current lat/lon from /navsatfix:
         self.current_lat = None
         self.current_lon = None
@@ -103,10 +103,16 @@ class SummonManager:
 
         # Immediately publish IDLE output to keep the car stationary
         self.publish_muxed_commands()
+        self.enable_pub.publish(Bool(data=True))
+        
 
         # Instead of a loop, we'll just spin:
         rospy.loginfo("SummonManager node is ready.")
         rospy.spin()
+
+
+        
+
 
     # ---------------------------------------------------------------------
     # Callback to mux the enable_sub signal based on fsm_state.
@@ -129,11 +135,11 @@ class SummonManager:
         if self.fsm_state == 0 or self.obsticle_stop:
             # IDLE: keep the car stationary
             rospy.loginfo("Put car in IDLE")
-            enable_msg = Bool(data=False)
-            gear_msg   = PacmodCmd(ui16_cmd=0)    # PARK
+            enable_msg = Bool(data=True)
+            gear_msg   = PacmodCmd(ui16_cmd=3)    # PARK
             brake_msg  = PacmodCmd(f64_cmd=1.0)     # Full brake
             accel_msg  = PacmodCmd(f64_cmd=0.0)
-            turn_msg   = PacmodCmd(ui16_cmd=0)      # No turn command
+            turn_msg   = PacmodCmd(ui16_cmd=1)      # No turn command
             steer_msg  = PositionWithSpeed(angular_position=0.0)
 
         elif self.fsm_state == 2:
@@ -227,8 +233,8 @@ class SummonManager:
             self.first_goal_long = msg.data
             self.init_goal_long = True
         self.goal_long = msg.data
+        self.update_exit_direction()
         if self.fsm_state == 0:
-            self.update_exit_direction()
             self.pull_out_activator()
         #rospy.loginfo(f"Received goal longitude: {msg.data}")
 
@@ -237,8 +243,8 @@ class SummonManager:
             self.first_goal_lat = msg.data
             self.init_goal_lat = True
         self.goal_lat = msg.data
+        self.update_exit_direction()
         if self.fsm_state == 0:
-            self.update_exit_direction()
             self.pull_out_activator()
         #rospy.loginfo(f"Received goal latitude: {msg.data}")
 

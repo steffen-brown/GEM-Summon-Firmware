@@ -26,7 +26,7 @@ from numpy import linalg as la
 import scipy.signal as signal
 from cv_bridge import CvBridge, CvBridgeError
 
-import utils.filters.OnlineFilter
+from filters import OnlineFilter
 
 
 # ROS Headers

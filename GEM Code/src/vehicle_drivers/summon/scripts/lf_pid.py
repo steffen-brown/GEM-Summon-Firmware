@@ -6,7 +6,7 @@ from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
 from geometry_msgs.msg import PoseStamped
 import time
 
-from pid_controllers import PID
+from pid import PID
 
 ###############################################################################
 # Lane Following Controller
@@ -87,12 +87,20 @@ class LaneFollowController:
         ###############################################################################
         
         # Publishers for vehicle control commands
-        self.enable_pub = rospy.Publisher('/LF_OUTPUT/enable', Bool, queue_size=1)
-        self.gear_pub = rospy.Publisher('/LF_OUTPUT/shift_cmd', PacmodCmd, queue_size=1)
-        self.brake_pub = rospy.Publisher('/LF_OUTPUT/brake_cmd', PacmodCmd, queue_size=1)
-        self.accel_pub = rospy.Publisher('/LF_OUTPUT/accel_cmd', PacmodCmd, queue_size=1)
-        self.turn_pub = rospy.Publisher('/LF_OUTPUT/turn_cmd', PacmodCmd, queue_size=1)
-        self.steer_pub = rospy.Publisher('/LF_OUTPUT/steer_cmd', PositionWithSpeed, queue_size=1)
+        # self.enable_pub = rospy.Publisher('/LF_OUTPUT/enable', Bool, queue_size=1, latch=True)
+        # self.gear_pub = rospy.Publisher('/LF_OUTPUT/shift_cmd', PacmodCmd, queue_size=1, latch=True)
+        # self.brake_pub = rospy.Publisher('/LF_OUTPUT/brake_cmd', PacmodCmd, queue_size=1, latch=True)
+        # self.accel_pub = rospy.Publisher('/LF_OUTPUT/accel_cmd', PacmodCmd, queue_size=1, latch=True)
+        # self.turn_pub = rospy.Publisher('/LF_OUTPUT/turn_cmd', PacmodCmd, queue_size=1, latch=True)
+        # self.steer_pub = rospy.Publisher('/LF_OUTPUT/steer_cmd', PositionWithSpeed, queue_size=1, latch=True)
+
+        self.enable_pub = rospy.Publisher('/pacmod/as_rx/enable', Bool, queue_size=1)
+        self.gear_pub = rospy.Publisher('/pacmod/as_rx/shift_cmd', PacmodCmd, queue_size=1)
+        self.brake_pub = rospy.Publisher('/pacmod/as_rx/brake_cmd', PacmodCmd, queue_size=1)
+        self.accel_pub = rospy.Publisher('/pacmod/as_rx/accel_cmd', PacmodCmd, queue_size=1)
+        self.turn_pub = rospy.Publisher('/pacmod/as_rx/turn_cmd', PacmodCmd, queue_size=1)
+        self.steer_pub = rospy.Publisher('/pacmod/as_rx/steer_cmd', PositionWithSpeed, queue_size=1)
+
 
         ###############################################################################
         # Command Messages Setup
@@ -211,7 +219,10 @@ class LaneFollowController:
         
         The loop runs at the rate specified by self.rate (10 Hz)
         """
-        while not rospy.is_shutdown() and self.module_active:
+        while not rospy.is_shutdown():
+
+            while self.module_active:
+                pass
             ###############################################################################
             # Vehicle Initialization
             ###############################################################################

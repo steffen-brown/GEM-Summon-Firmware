@@ -87,8 +87,10 @@ class ExitParking:
         self.slope_thresh = rospy.get_param(
             "~slope_thresh", 0.4
         )  # |slope| <= 0.4 → ~22°
-        self.roi_top_frac = rospy.get_param("~roi_top_frac", 0.30)
+        self.roi_top_frac = rospy.get_param("~roi_top_frac", 0.570)
         self.roi_bot_frac = rospy.get_param("~roi_bot_frac", 0.90)
+        self.roi_left_frac  = rospy.get_param("~roi_left_frac", 0.40)   # keep center third by default
+        self.roi_right_frac = rospy.get_param("~roi_right_frac", 0.60)
 
         # ───────── Additional variables for parking logic ─────────
         self.gem_enable = False  # Indicates vehicle initialization complete
@@ -275,164 +277,250 @@ class ExitParking:
             yaw_curr = np.radians(90 - heading_curr)
         return yaw_curr
 
+        # ───────── New synchronised RGB+Depth callback ────────────────────────
+    # def synced_cb(self, rgb_msg: Image, depth_msg: Image):
+    #     rospy.loginfo("Entered synced_cb() callback — RGB + Depth received.")
+    #     # Convert ROS messages to OpenCV images
+    #     rgb   = self.bridge.imgmsg_to_cv2(rgb_msg,   "bgr8")
+    #     depth = self.bridge.imgmsg_to_cv2(depth_msg, "passthrough")
+    #     rospy.loginfo("Converted RGB and Depth to OpenCV format.")
+    #     if depth_msg.encoding == "16UC1":
+    #         depth = depth.astype(np.float32) / 1000.0   # mm → m
+
+    #     # ───────── Crop to ROI (top/bottom + left/right) ─────────
+    #     h, w = rgb.shape[:2]
+    #     y0 = int(h * self.roi_top_frac)
+    #     y1 = int(h * self.roi_bot_frac)
+    #     x0 = int(w * self.roi_left_frac)
+    #     x1 = int(w * self.roi_right_frac)
+    #     rgb_roi   = rgb[y0:y1, x0:x1]
+    #     depth_roi = depth[y0:y1, x0:x1]
+
+    #     # ───────── Detect lane line & angle in ROI ─────────
+    #     lane_mask, avg_lane_angle = self.get_lane_mask(rgb_roi)
+    #     ys, xs = np.where(lane_mask > 0)
+    #     if xs.size == 0:
+    #         rospy.logwarn_throttle(2.0, "No lane detected in ROI")
+    #         return
+
+    #     # (Neel :) added code to compute angle of lane as well (used later for heading hold)
+    #     # If a lane angle was computed, determine the desired vehicle heading.
+    #     # The desired heading is perpendicular to the lane line.
+    #     if avg_lane_angle is not None and self.current_heading is not None:
+    #         # Two possible normals: avg_lane_angle + pi/2 and avg_lane_angle - pi/2.
+    #         option1 = avg_lane_angle + math.pi / 2
+    #         option2 = avg_lane_angle - math.pi / 2
+    #         # Choose the option with the smallest angular error to current heading.
+    #         current_heading_rad = math.radians(self.current_heading)
+    #         error1 = abs(normalize_angle_error(option1 - current_heading_rad))
+    #         error2 = abs(normalize_angle_error(option2 - current_heading_rad))
+    #         ## error1 and error2 gives output in radians
+    #         if error1 < error2:
+    #             self.desired_heading = math.degrees(option1)
+    #         else:
+    #             self.desired_heading = math.degrees(option2)
+    #         rospy.loginfo_throttle(
+    #             2.0,
+    #             f"Desired heading set to: {(self.desired_heading):.2f} deg",
+    #         )
+    #     else:
+    #         # If no lane angle available, default desired heading to current heading.
+    #         if self.current_heading is not None:
+    #             self.desired_heading = self.current_heading  ## this is alr in degrees
+
+    #     # Process lane mask blobs to compute the nearest lane distance
+    #     # ── Split mask into separate blobs and keep the nearest stripe ──
+    #     lane_blobs = []
+    #     num_labels, labels = cv2.connectedComponents(lane_mask)
+
+    #     for lbl in range(1, num_labels):  # label 0 is background
+    #         yb, xb = np.where(labels == lbl)
+    #         blob_depths = depth_roi[yb, xb]
+    #         blob_depths = blob_depths[np.isfinite(blob_depths) & (blob_depths > 0)]
+    #         if blob_depths.size == 0:
+    #             continue
+    #         median_d = np.median(blob_depths)
+    #         lane_blobs.append((median_d, lbl, xb, yb))
+
+    #     # Sort blobs by depth
+    #     lane_blobs.sort(key=lambda tup: tup[0])
+
+    #     # Use second-nearest if available
+    #     if len(lane_blobs) < 2:
+    #         rospy.logwarn("Fewer than 2 valid lane blobs found — skipping")
+    #         return
+
+    #     # Extract data for second-nearest
+    #     lane_depths_second_nearest, best_label, xb, yb = lane_blobs[1]
+
+    #     dist = float(lane_depths_second_nearest)
+
+    #     horizontal_distance = dist  # nearest stripe distance
+
+    #     rospy.loginfo(f"Final horizontal lane distance = {horizontal_distance:.2f} m")
+
+    #     # Convert to horizontal (ground) distance:
+    #     # CAMERA_HEIGHT = 1.80  # meters (camera mounting height)
+    #     # if dist > CAMERA_HEIGHT:
+    #     #     horizontal_distance = math.sqrt(dist**2 - CAMERA_HEIGHT**2)
+    #     #     rospy.loginfo_throttle(
+    #     #         1.0, f"Lane horizontal distance ≈ {horizontal_distance:.2f} m"
+    #     #     )
+    #     # else:
+    #     #     rospy.logwarn_throttle(
+    #     #         1.0, "Invalid depth: lane is below camera or distorted"
+    #     #     )
+    #     #     return
+
+    #     # Optional low-pass filtering for stability (smoothing factor ALPHA)
+    #     if self.init_lane_distance is None:
+    #         self.init_lane_distance = horizontal_distance
+
+    #     if self.updated_lane_distance is None:
+    #         self.updated_lane_distance = horizontal_distance
+    #     ALPHA = 0.2
+    #     if self.lane_distance is None:
+    #         self.lane_distance = horizontal_distance
+    #     else:
+    #         self.lane_distance = (
+    #             ALPHA * horizontal_distance + (1 - ALPHA) * self.lane_distance
+    #         )
+
+    #     rospy.loginfo(f"Final horizontal lane distance = {self.lane_distance:.2f} m")
+
+    #     # Publish the horizontal lane distance
+    #     self.lane_dist_pub.publish(Float32(self.lane_distance))
+    #     ## inits the lane distance
+    #     rospy.loginfo_throttle(1.0, f"Nearest lane ≈ {self.lane_distance:.2f} m")
+
+    #     debug = rgb.copy()
+    #     for px, py in zip(xs, ys):
+    #         cv2.circle(debug, (px + x0, py + y0), 1, (0, 255, 255), -1)
+
+    #     # (remaining debug text / publish exactly as before)
+    #     cv2.putText(debug, f"Curr Nearest: {self.lane_distance:.2f} m",
+    #                 (30, 50),  cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+    #     cv2.putText(debug, f"Init Lane Dist: {self.init_lane_distance:.2f} m",
+    #                 (30, 80),  cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+    #     cv2.putText(debug, f"Updated Lane: {self.updated_lane_distance:.2f} m",
+    #                 (30,110),  cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+
+    #     self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, "bgr8"))
+    #     cv2.imshow("Lane Debug View", debug)
+    #     cv2.waitKey(1)
+    #     rospy.loginfo("imshow() & waitKey() done")
+
+    #     return  # end synced_cb
+
+        # ───────── New synchronised RGB+Depth callback ────────────────────────
     # ───────── New synchronised RGB+Depth callback ────────────────────────
+        # ───────── New synchronised RGB+Depth callback ────────────────────────
+        # ───────── New synchronised RGB+Depth callback ────────────────────────
     def synced_cb(self, rgb_msg: Image, depth_msg: Image):
         rospy.loginfo("Entered synced_cb() callback — RGB + Depth received.")
-        # Convert ROS messages to OpenCV images
-        rgb = self.bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
+        rgb   = self.bridge.imgmsg_to_cv2(rgb_msg,   "bgr8")
         depth = self.bridge.imgmsg_to_cv2(depth_msg, "passthrough")
-        rospy.loginfo("Converted RGB and Depth to OpenCV format.")
         if depth_msg.encoding == "16UC1":
-            depth = depth.astype(np.float32) / 1000.0
+            depth = depth.astype(np.float32) / 1000.0   # mm → m
 
-        # Crop image to Region Of Interest (ROI)
+            # Save first RGB image only once
+        if not hasattr(self, "first_frame_saved"):
+            self.first_frame_saved = False
+        if not self.first_frame_saved:
+            cv2.imwrite("/tmp/first_rgb.png", rgb)
+            rospy.loginfo("Saved first RGB image to /tmp/first_rgb.png")
+            self.first_frame_saved = True
+
+        # ───── crop (top/bot & left/right) ─────
         h, w = rgb.shape[:2]
         y0 = int(h * self.roi_top_frac)
         y1 = int(h * self.roi_bot_frac)
-        rgb_roi = rgb[y0:y1]
-        depth_roi = depth[y0:y1]
+        x0 = int(w * self.roi_left_frac)
+        x1 = int(w * self.roi_right_frac)
+        rgb_roi   = rgb[y0:y1, x0:x1]
+        depth_roi = depth[y0:y1, x0:x1]
 
-        # Compute lane mask and average lane angle from ROI
+        # ───── lane mask & angle ─────
         lane_mask, avg_lane_angle = self.get_lane_mask(rgb_roi)
         ys, xs = np.where(lane_mask > 0)
         if xs.size == 0:
             rospy.logwarn_throttle(2.0, "No lane detected in ROI")
             return
 
-        # (Neel :) added code to compute angle of lane as well (used later for heading hold)
-        # If a lane angle was computed, determine the desired vehicle heading.
-        # The desired heading is perpendicular to the lane line.
+        # desired-heading logic (unchanged)
         if avg_lane_angle is not None and self.current_heading is not None:
-            # Two possible normals: avg_lane_angle + pi/2 and avg_lane_angle - pi/2.
-            option1 = avg_lane_angle + math.pi / 2
-            option2 = avg_lane_angle - math.pi / 2
-            # Choose the option with the smallest angular error to current heading.
-            current_heading_rad = math.radians(self.current_heading)
-            error1 = abs(normalize_angle_error(option1 - current_heading_rad))
-            error2 = abs(normalize_angle_error(option2 - current_heading_rad))
-            ## error1 and error2 gives output in radians
-            if error1 < error2:
-                self.desired_heading = math.degrees(option1)
-            else:
-                self.desired_heading = math.degrees(option2)
-            rospy.loginfo_throttle(
-                2.0,
-                f"Desired heading set to: {(self.desired_heading):.2f} deg",
-            )
-        else:
-            # If no lane angle available, default desired heading to current heading.
-            if self.current_heading is not None:
-                self.desired_heading = self.current_heading  ## this is alr in degrees
+            opt1 = avg_lane_angle + math.pi / 2
+            opt2 = avg_lane_angle - math.pi / 2
+            curr = math.radians(self.current_heading)
+            self.desired_heading = math.degrees(opt1 if
+                                    abs(normalize_angle_error(opt1 - curr)) <
+                                    abs(normalize_angle_error(opt2 - curr)) else opt2)
+        elif self.current_heading is not None:
+            self.desired_heading = self.current_heading
 
-        # Process lane mask blobs to compute the nearest lane distance
-        # ── Split mask into separate blobs and keep the nearest stripe ──
+        # ───── blob list sorted by depth (nearest first) ─────
         lane_blobs = []
         num_labels, labels = cv2.connectedComponents(lane_mask)
-
-        for lbl in range(1, num_labels):  # label 0 is background
+        for lbl in range(1, num_labels):
             yb, xb = np.where(labels == lbl)
-            blob_depths = depth_roi[yb, xb]
-            blob_depths = blob_depths[np.isfinite(blob_depths) & (blob_depths > 0)]
-            if blob_depths.size == 0:
-                continue
-            median_d = np.median(blob_depths)
-            lane_blobs.append((median_d, lbl, xb, yb))
-
-        # Sort blobs by depth
-        lane_blobs.sort(key=lambda tup: tup[0])
-
-        # Use second-nearest if available
+            bd = depth_roi[yb, xb]
+            bd = bd[np.isfinite(bd) & (bd > 0)]
+            if bd.size:
+                lane_blobs.append((np.median(bd), xb, yb))
+        lane_blobs.sort(key=lambda t: t[0])
         if len(lane_blobs) < 2:
             rospy.logwarn("Fewer than 2 valid lane blobs found — skipping")
             return
 
-        # Extract data for second-nearest
-        lane_depths_second_nearest, best_label, xb, yb = lane_blobs[1]
+        # use **second-nearest** stripe to avoid the very close bumper line
+        _, xb, yb = lane_blobs[1]
 
-        dist = float(lane_depths_second_nearest)
+        # ───── representative pixel: point in this blob closest to image-centre X ─────
+        centre_x = (x0 + x1) // 2
+        full_x   = xb + x0
+        idx_centre = np.argmin(np.abs(full_x - centre_x))
+        rep_px, rep_py = xb[idx_centre], yb[idx_centre]   # ROI coords
 
-        horizontal_distance = dist  # nearest stripe distance
+        # ───── depth = median of 5×5 patch around that pixel ─────
+        y_lo, y_hi = max(rep_py - 2, 0), min(rep_py + 3, depth_roi.shape[0])
+        x_lo, x_hi = max(rep_px - 2, 0), min(rep_px + 3, depth_roi.shape[1])
+        patch = depth_roi[y_lo:y_hi, x_lo:x_hi]
+        patch_vals = patch[np.isfinite(patch) & (patch > 0)]
+        if patch_vals.size == 0:
+            rospy.logwarn_throttle(1.0, "Depth patch invalid — skipping")
+            return
+        horizontal_distance = float(np.median(patch_vals))
 
-        rospy.loginfo(f"Final horizontal lane distance = {horizontal_distance:.2f} m")
-
-        # Convert to horizontal (ground) distance:
-        # CAMERA_HEIGHT = 1.80  # meters (camera mounting height)
-        # if dist > CAMERA_HEIGHT:
-        #     horizontal_distance = math.sqrt(dist**2 - CAMERA_HEIGHT**2)
-        #     rospy.loginfo_throttle(
-        #         1.0, f"Lane horizontal distance ≈ {horizontal_distance:.2f} m"
-        #     )
-        # else:
-        #     rospy.logwarn_throttle(
-        #         1.0, "Invalid depth: lane is below camera or distorted"
-        #     )
-        #     return
-
-        # Optional low-pass filtering for stability (smoothing factor ALPHA)
+        # ───── low-pass filter & bookkeeping ─────
         if self.init_lane_distance is None:
             self.init_lane_distance = horizontal_distance
-
         if self.updated_lane_distance is None:
             self.updated_lane_distance = horizontal_distance
         ALPHA = 0.2
-        if self.lane_distance is None:
-            self.lane_distance = horizontal_distance
-        else:
-            self.lane_distance = (
-                ALPHA * horizontal_distance + (1 - ALPHA) * self.lane_distance
-            )
-
-        rospy.loginfo(f"Final horizontal lane distance = {self.lane_distance:.2f} m")
-
-        # Publish the horizontal lane distance
+        self.lane_distance = (horizontal_distance if self.lane_distance is None
+                              else ALPHA*horizontal_distance + (1-ALPHA)*self.lane_distance)
         self.lane_dist_pub.publish(Float32(self.lane_distance))
-        ## inits the lane distance
         rospy.loginfo_throttle(1.0, f"Nearest lane ≈ {self.lane_distance:.2f} m")
 
-        # Debug overlay: show only the nearest lane blob but include multiple distance metrics
+        # ───── debug overlay ─────
         debug = rgb.copy()
-
-        # Draw the nearest (best) lane blob in yellow
         for px, py in zip(xb, yb):
-            cv2.circle(debug, (px, py + y0), 1, (0, 255, 255), -1)
+            cv2.circle(debug, (px + x0, py + y0), 1, (0, 255, 255), -1)  # blob points
+        cv2.circle(debug, (rep_px + x0, rep_py + y0), 6, (255, 0, 0), 2) # depth pixel
 
-        # Annotate distances
-        cv2.putText(
-            debug,
-            f"Curr Nearest: {self.lane_distance:.2f} m",
-            (30, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (0, 0, 255),
-            2,
-        )
-        cv2.putText(
-            debug,
-            f"Init Lane Dist: {self.init_lane_distance:.2f} m",
-            (30, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (0, 0, 255),
-            2,
-        )
-        cv2.putText(
-            debug,
-            f"Updated Lane: {self.updated_lane_distance:.2f} m",
-            (30, 110),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (0, 0, 255),
-            2,
-        )
+        cv2.putText(debug, f"Curr Nearest: {self.lane_distance:.2f} m",
+                    (30, 50),  cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+        cv2.putText(debug, f"Init Lane Dist: {self.init_lane_distance:.2f} m",
+                    (30, 80),  cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+        cv2.putText(debug, f"Updated Lane: {self.updated_lane_distance:.2f} m",
+                    (30,110), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
 
-        # Publish and display
-        rospy.loginfo("Attempting to show debug image now...")
         self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, "bgr8"))
         cv2.imshow("Lane Debug View", debug)
         cv2.waitKey(1)
-        rospy.loginfo("imshow() & waitKey() done")
 
-        return  # end synced_cb
+
+
 
     # ───────── Simple lane mask helper ─────────────────────────────────────
     def get_lane_mask(self, bgr_img):
@@ -670,7 +758,7 @@ class ExitParking:
             ## ****************** Tunable Parameter ***************************
             # (Neel :) Define the threshold distance from which the car needs
             #          to stop before making the full turn.
-            threshold = 6  # meters = around 10.5 feet
+            threshold = 5.5  # meters = around 10.5 feet
 
             if self.updated_lane_distance is None:
                 self.updated_lane_distance = self.lane_distance
