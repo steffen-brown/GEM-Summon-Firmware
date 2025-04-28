@@ -350,99 +350,213 @@ class LaneNetDetector:
         
         return masked_image
 
+    # def generate_waypoints(self, lane_mask):
+    #     """
+    #     Generate navigation waypoints from lane mask.
+        
+    #     This function:
+    #     1. Scans the lane mask from bottom to top
+    #     2. Identifies the left lane boundary
+    #     3. Estimates center of lane using offset from boundary
+    #     4. Creates waypoints for vehicle to follow
+        
+    #     Args:
+    #         lane_mask: Binary mask of detected lane markings
+            
+    #     Returns:
+    #         path: ROS Path message with waypoints
+    #         left_boundary: List of points representing left lane boundary
+    #     """
+    #     # Create ROS Path message
+    #     path = Path()
+    #     path.header.frame_id = "map"
+        
+    #     # Get dimensions of lane mask
+    #     height, width = lane_mask.shape
+        
+    #     # Sampling parameters
+    #     sampling_step = 10  # Sample every 10 pixels vertically
+    #     left_boundary = []  # Store left boundary points
+    #     offset_pixels = 200  # Estimated distance from left boundary to lane center
+        
+    #     ###############################################################################
+    #     # Scan Lane Mask and Extract Boundaries
+    #     ###############################################################################
+        
+    #     # Scan from bottom to top of image
+    #     for y in range(height - 1, 0, -sampling_step):
+    #         # Find all x coordinates where lane marking exists at this y
+    #         x_indices = np.where(lane_mask[y, :] > 0)[0]
+            
+    #         if len(x_indices) > 0:
+    #             # Use leftmost point as left boundary
+    #             x_left = x_indices[0]
+    #             # Store with slight offset for better tracking
+    #             left_boundary.append((x_left - 40, y))
+    #         else:
+    #             # No lane marking found at this y
+    #             left_boundary.append(None)
+                
+    #     # Filter boundaries to get continuous line segments
+    #     left_boundary = self.filter_continuous_boundary(left_boundary)
+        
+    #     ###############################################################################
+    #     # Generate Waypoints from Boundaries
+    #     ###############################################################################
+        
+    #     # Create waypoints from left boundary with offset
+    #     for lb in left_boundary:
+    #         if lb:  # If boundary point exists
+    #             # OG Given # Calculate lane center by adding offset to left boundary
+    #             # x_center = lb[0] + offset_pixels
+    #             # y = lb[1]
+                
+    #             #Option 1 
+    #             x_left = lb[0]
+    #             # Dynamic offset toward center
+    #             offset_pixels = (width // 2) - x_left
+    #             x_center = x_left + offset_pixels
+    #             y = lb[1]
+
+                
+    #             # Create ROS PoseStamped message for waypoint
+    #             point = PoseStamped()
+    #             point.pose.position.x = x_center
+    #             point.pose.position.y = y
+    #             path.poses.append(point)
+                
+    #     # Use only the first 7 waypoints (closest to vehicle)
+    #     path.poses = path.poses[:7]
+        
+    #     ###############################################################################
+    #     # Calculate End Goal (Target Point)
+    #     ###############################################################################
+        
+    #     if len(path.poses) > 0:
+    #         # Extract x and y coordinates from all waypoints
+    #         xs = [p.pose.position.x for p in path.poses]
+    #         ys = [p.pose.position.y for p in path.poses]
+            
+    #         # Use median for stability
+    #         median_x = np.median(xs)
+    #         median_y = np.median(ys)
+            
+    #         # Create end goal pose
+    #         self.endgoal = PoseStamped()
+    #         self.endgoal.header = path.header
+    #         self.endgoal.pose.position.x = median_x
+    #         self.endgoal.pose.position.y = median_y
+    #     else:
+    #         # No waypoints found
+    #         self.endgoal = None
+            
+    #     return path, left_boundary
+
+    # Our code, above is the code provided
     def generate_waypoints(self, lane_mask):
         """
-        Generate navigation waypoints from lane mask.
-        
-        This function:
-        1. Scans the lane mask from bottom to top
-        2. Identifies the left lane boundary
-        3. Estimates center of lane using offset from boundary
-        4. Creates waypoints for vehicle to follow
-        
+        Generate navigation waypoints from lane mask using both left and right boundaries.
+
         Args:
             lane_mask: Binary mask of detected lane markings
-            
+
         Returns:
             path: ROS Path message with waypoints
             left_boundary: List of points representing left lane boundary
         """
-        # Create ROS Path message
         path = Path()
         path.header.frame_id = "map"
-        
-        # Get dimensions of lane mask
+
         height, width = lane_mask.shape
-        
-        # Sampling parameters
-        sampling_step = 10  # Sample every 10 pixels vertically
-        left_boundary = []  # Store left boundary points
-        offset_pixels = 200  # Estimated distance from left boundary to lane center
-        
+        sampling_step = 10
+
+        left_boundary = []
+        right_boundary = []
+
         ###############################################################################
-        # Scan Lane Mask and Extract Boundaries
+        # Scan Lane Mask and Extract Left and Right Boundaries
         ###############################################################################
-        
-        # Scan from bottom to top of image
+
         for y in range(height - 1, 0, -sampling_step):
-            # Find all x coordinates where lane marking exists at this y
             x_indices = np.where(lane_mask[y, :] > 0)[0]
-            
-            if len(x_indices) > 0:
-                # Use leftmost point as left boundary
+
+            if len(x_indices) > 1:
+                # If two or more points are detected
                 x_left = x_indices[0]
-                # Store with slight offset for better tracking
-                left_boundary.append((x_left - 40, y))
+                x_right = x_indices[-1]
+                left_boundary.append((x_left, y))
+                right_boundary.append((x_right, y))
+            elif len(x_indices) == 1:
+                # Only one point detected (could be left or right depending on lane visibility)
+                x_single = x_indices[0]
+                # Guess whether it’s closer to left or right
+                if x_single < width // 2:
+                    # Closer to left side
+                    left_boundary.append((x_single, y))
+                    right_boundary.append(None)
+                else:
+                    # Closer to right side
+                    left_boundary.append(None)
+                    right_boundary.append((x_single, y))
             else:
-                # No lane marking found at this y
+                # No lane detected at this row
                 left_boundary.append(None)
-                
-        # Filter boundaries to get continuous line segments
+                right_boundary.append(None)
+
+        # Filter boundaries
         left_boundary = self.filter_continuous_boundary(left_boundary)
-        
+        right_boundary = self.filter_continuous_boundary(right_boundary)
+
         ###############################################################################
-        # Generate Waypoints from Boundaries
+        # Generate Waypoints from Centerline Between Left and Right Boundaries
         ###############################################################################
-        
-        # Create waypoints from left boundary with offset
-        for lb in left_boundary:
-            if lb:  # If boundary point exists
-                # Calculate lane center by adding offset to left boundary
-                x_center = lb[0] + offset_pixels
+
+        for lb, rb in zip(left_boundary, right_boundary):
+            if lb is not None and rb is not None:
+                # Both sides are detected → center between them
+                x_center = (lb[0] + rb[0]) // 2
+                y = lb[1]  # (same y for both)
+            elif lb is not None:
+                # Only left boundary detected → assume fixed lane width
+                estimated_lane_width = 400  # you might tune this if necessary
+                x_center = lb[0] + estimated_lane_width // 2
                 y = lb[1]
-                
-                # Create ROS PoseStamped message for waypoint
-                point = PoseStamped()
-                point.pose.position.x = x_center
-                point.pose.position.y = y
-                path.poses.append(point)
-                
-        # Use only the first 7 waypoints (closest to vehicle)
+            elif rb is not None:
+                # Only right boundary detected → assume fixed lane width
+                estimated_lane_width = 400  # you might tune this if necessary
+                x_center = rb[0] - estimated_lane_width // 2
+                y = rb[1]
+            else:
+                # No reliable boundary → skip
+                continue
+
+            point = PoseStamped()
+            point.pose.position.x = x_center
+            point.pose.position.y = y
+            path.poses.append(point)
+
+        # Only keep first 7 waypoints
         path.poses = path.poses[:7]
-        
+
         ###############################################################################
-        # Calculate End Goal (Target Point)
+        # Calculate End Goal
         ###############################################################################
-        
+
         if len(path.poses) > 0:
-            # Extract x and y coordinates from all waypoints
             xs = [p.pose.position.x for p in path.poses]
             ys = [p.pose.position.y for p in path.poses]
-            
-            # Use median for stability
+
             median_x = np.median(xs)
             median_y = np.median(ys)
-            
-            # Create end goal pose
+
             self.endgoal = PoseStamped()
             self.endgoal.header = path.header
             self.endgoal.pose.position.x = median_x
             self.endgoal.pose.position.y = median_y
         else:
-            # No waypoints found
             self.endgoal = None
-            
-        return path, left_boundary
+
+        return path, left_boundary    
 
     def filter_continuous_boundary(self, boundary):
         """
