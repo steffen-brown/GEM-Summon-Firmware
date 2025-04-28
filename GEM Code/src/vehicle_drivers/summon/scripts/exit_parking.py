@@ -73,6 +73,8 @@ def normalize_angle_error(err):
 # ───────── Exit Parking Class ────────────────────────────────────────
 class ExitParking:
     def __init__(self):
+        self.test_mode = False
+
         rospy.init_node("exit_parking", anonymous=True)
         self.rate = rospy.Rate(10)
         self.bridge = CvBridge()
@@ -98,7 +100,10 @@ class ExitParking:
         self.lane_distance = None  # Latest computed lane distance (meters)
 
         ## (Neel :) Set this to true for right turn, false for left turn *****
-        self.exit_direction = False
+        if self.test_mode:
+            self.exit_direction = False
+        else:
+            self.exit_direction = None
 
         self.init_lane_distance = None
         self.updated_lane_distance = None
@@ -181,43 +186,44 @@ class ExitParking:
         self.sync.registerCallback(self.synced_cb)
 
         # ───────── Publishers (original + new) ─────────────────────────────
-        self.enable_pub = rospy.Publisher(
-            "/pacmod/as_rx/enable", Bool, queue_size=1, latch=True
-        )
-        self.gear_pub = rospy.Publisher(
-            "/pacmod/as_rx/shift_cmd", PacmodCmd, queue_size=1, latch=True
-        )
-        self.brake_pub = rospy.Publisher(
-            "/pacmod/as_rx/brake_cmd", PacmodCmd, queue_size=1, latch=True
-        )
-        self.accel_pub = rospy.Publisher(
-            "/pacmod/as_rx/accel_cmd", PacmodCmd, queue_size=1, latch=True
-        )
-        self.turn_pub = rospy.Publisher(
-            "/pacmod/as_rx/turn_cmd", PacmodCmd, queue_size=1, latch=True
-        )
-        self.steer_pub = rospy.Publisher(
-            "/pacmod/as_rx/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
-        )
-
-        # self.enable_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/enable", Bool, queue_size=1, latch=True
-        # )
-        # self.gear_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/shift_cmd", PacmodCmd, queue_size=1, latch=True
-        # )
-        # self.brake_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/brake_cmd", PacmodCmd, queue_size=1, latch=True
-        # )
-        # self.accel_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/accel_cmd", PacmodCmd, queue_size=1, latch=True
-        # )
-        # self.turn_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/turn_cmd", PacmodCmd, queue_size=1, latch=True
-        # )
-        # self.steer_pub = rospy.Publisher(
-        #     "/EP_OUTPUT/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
-        # )
+        if self.test_mode:
+            self.enable_pub = rospy.Publisher(
+                "/pacmod/as_rx/enable", Bool, queue_size=1, latch=True
+            )
+            self.gear_pub = rospy.Publisher(
+                "/pacmod/as_rx/shift_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.brake_pub = rospy.Publisher(
+                "/pacmod/as_rx/brake_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.accel_pub = rospy.Publisher(
+                "/pacmod/as_rx/accel_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.turn_pub = rospy.Publisher(
+                "/pacmod/as_rx/turn_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.steer_pub = rospy.Publisher(
+                "/pacmod/as_rx/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
+            )
+        else:
+            self.enable_pub = rospy.Publisher(
+                "/EP_OUTPUT/enable", Bool, queue_size=1, latch=True
+            )
+            self.gear_pub = rospy.Publisher(
+                "/EP_OUTPUT/shift_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.brake_pub = rospy.Publisher(
+                "/EP_OUTPUT/brake_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.accel_pub = rospy.Publisher(
+                "/EP_OUTPUT/accel_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.turn_pub = rospy.Publisher(
+                "/EP_OUTPUT/turn_cmd", PacmodCmd, queue_size=1, latch=True
+            )
+            self.steer_pub = rospy.Publisher(
+                "/EP_OUTPUT/steer_cmd", PositionWithSpeed, queue_size=1, latch=True
+            )
 
         self.active_pub = rospy.Publisher(
             "/EXIT_PARK/active", Bool, queue_size=1, latch=True
@@ -577,8 +583,9 @@ class ExitParking:
 
     # ───────── Run loop ────────────────────────────────────────────────────
     def run(self):
-        # while (self.module_active == False):
-        #     pass
+        if not self.test_mode:
+            while (self.module_active == False):
+                pass
 
         rospy.loginfo("ExitParking node with lane distance extension running …")
 
