@@ -22,6 +22,7 @@ import math
 import time
 import torch
 import numpy as np
+from collections import deque 
 from numpy import linalg as la
 import scipy.signal as signal
 from cv_bridge import CvBridge, CvBridgeError
@@ -87,9 +88,14 @@ class LaneNetDetector:
         # Image processing utilities and state variables
         self.bridge = CvBridge()  # Converts between ROS Image messages and OpenCV images
         self.prev_left_boundary = None  # Store previous lane boundary for smoothing
-        self.estimated_lane_width_pixels = 200  # Approximate lane width in image pixels
         self.prev_waypoints = None  # Previous waypoints for temporal consistency
         self.endgoal = None  # Target point for navigation
+
+        self.estimated_lane_width_pixels = 400      # start-up guess (px)
+        self.last_left_x  = None                    # most recent valid edge
+        self.last_right_x = None
+
+        self.lane_width_history = deque(maxlen=15)
         
         ###############################################################################
         # Deep Learning Model Setup
@@ -453,110 +459,95 @@ class LaneNetDetector:
     #     return path, left_boundary
 
     # Our code, above is the code provided
+ # -------------------------------------------------------------------------
+#  CURVE-ROBUST   generate_waypoints()
+# -------------------------------------------------------------------------
     def generate_waypoints(self, lane_mask):
         """
-        Generate navigation waypoints from lane mask using both left and right boundaries.
-
-        Args:
-            lane_mask: Binary mask of detected lane markings
-
-        Returns:
-            path: ROS Path message with waypoints
-            left_boundary: List of points representing left lane boundary
+        Build a centred Path that stays reliable through ≈ 12 m-radius curves.
+        The logic
+        • keeps a history-median lane-width,
+        • fabricates the missing edge when only one is visible,
+        • adapts vertical sampling density,
+        • outputs the first 12 (closest) centre points.
         """
         path = Path()
         path.header.frame_id = "map"
 
-        height, width = lane_mask.shape
-        sampling_step = 10
+        h, w = lane_mask.shape
+        step = max(6, int(0.02 * h))        # finer sampling on smaller images
 
-        left_boundary = []
-        right_boundary = []
+        left_raw, right_raw = [], []
 
-        ###############################################################################
-        # Scan Lane Mask and Extract Left and Right Boundaries
-        ###############################################################################
+        # 1 ───────────────────────── scan mask bottom→top
+        for y in range(h - 1, -1, -step):
+            xs = np.where(lane_mask[y, :] > 0)[0]
 
-        for y in range(height - 1, 0, -sampling_step):
-            x_indices = np.where(lane_mask[y, :] > 0)[0]
-
-            if len(x_indices) > 1:
-                # If two or more points are detected
-                x_left = x_indices[0]
-                x_right = x_indices[-1]
-                left_boundary.append((x_left, y))
-                right_boundary.append((x_right, y))
-            elif len(x_indices) == 1:
-                # Only one point detected (could be left or right depending on lane visibility)
-                x_single = x_indices[0]
-                # Guess whether it’s closer to left or right
-                if x_single < width // 2:
-                    # Closer to left side
-                    left_boundary.append((x_single, y))
-                    right_boundary.append(None)
+            if xs.size > 1:                 # both edges visible
+                x_l, x_r = xs[0], xs[-1]
+                left_raw.append((x_l, y))
+                right_raw.append((x_r, y))
+            elif xs.size == 1:              # single edge → guess which
+                x = xs[0]
+                if x < w // 2:
+                    left_raw.append((x, y)); right_raw.append(None)
                 else:
-                    # Closer to right side
-                    left_boundary.append(None)
-                    right_boundary.append((x_single, y))
-            else:
-                # No lane detected at this row
-                left_boundary.append(None)
-                right_boundary.append(None)
+                    left_raw.append(None);   right_raw.append((x, y))
+            else:                           # nothing on this row
+                left_raw.append(None);       right_raw.append(None)
 
-        # Filter boundaries
-        left_boundary = self.filter_continuous_boundary(left_boundary)
-        right_boundary = self.filter_continuous_boundary(right_boundary)
+        # 2 ───────────────────────── tidy edges
+        left  = self.filter_continuous_boundary(left_raw)
+        right = self.filter_continuous_boundary(right_raw)
 
-        ###############################################################################
-        # Generate Waypoints from Centerline Between Left and Right Boundaries
-        ###############################################################################
-
-        for lb, rb in zip(left_boundary, right_boundary):
+        # 3 ───────────────────────── build centreline
+        for lb, rb in zip(left, right):
+            # ----- ensure we have both edges (create synthetic one if needed)
             if lb is not None and rb is not None:
-                # Both sides are detected → center between them
-                x_center = (lb[0] + rb[0]) // 2
-                y = lb[1]  # (same y for both)
-            elif lb is not None:
-                # Only left boundary detected → assume fixed lane width
-                estimated_lane_width = 400  # you might tune this if necessary
-                x_center = lb[0] + estimated_lane_width // 2
-                y = lb[1]
-            elif rb is not None:
-                # Only right boundary detected → assume fixed lane width
-                estimated_lane_width = 400  # you might tune this if necessary
-                x_center = rb[0] - estimated_lane_width // 2
-                y = rb[1]
+                lane_w = rb[0] - lb[0]
+                self.lane_width_history.append(lane_w)
+            elif lb is not None:            # fabricate outer edge
+                lane_w = np.median(self.lane_width_history) if self.lane_width_history else self.estimated_lane_width_pixels
+                rb = (lb[0] + int(lane_w), lb[1])
+            elif rb is not None:            # fabricate inner edge
+                lane_w = np.median(self.lane_width_history) if self.lane_width_history else self.estimated_lane_width_pixels
+                lb = (rb[0] - int(lane_w), rb[1])
             else:
-                # No reliable boundary → skip
-                continue
+                continue                    # nothing to use on this row
 
-            point = PoseStamped()
-            point.pose.position.x = x_center
-            point.pose.position.y = y
-            path.poses.append(point)
+            # update width estimate with floor to prevent shrink-drift
+            self.estimated_lane_width_pixels = max(
+                0.35 * w,                  # 35 % of image width ≃ 2.5 m @ 640 px
+                0.7 * self.estimated_lane_width_pixels + 0.3 * lane_w
+            )
 
-        # Only keep first 7 waypoints
-        path.poses = path.poses[:7]
+            # save last reliable edges
+            self.last_left_x, self.last_right_x = lb[0], rb[0]
 
-        ###############################################################################
-        # Calculate End Goal
-        ###############################################################################
+            # centre point
+            x_c = (lb[0] + rb[0]) // 2
+            y_c = lb[1]
 
-        if len(path.poses) > 0:
+            pose = PoseStamped()
+            pose.pose.position.x = x_c
+            pose.pose.position.y = y_c
+            path.poses.append(pose)
+
+        # 4 ───────────────────────── crop & end-goal
+        path.poses = path.poses[:12]        # keep closest 12
+
+        if path.poses:
             xs = [p.pose.position.x for p in path.poses]
             ys = [p.pose.position.y for p in path.poses]
-
-            median_x = np.median(xs)
-            median_y = np.median(ys)
-
-            self.endgoal = PoseStamped()
-            self.endgoal.header = path.header
-            self.endgoal.pose.position.x = median_x
-            self.endgoal.pose.position.y = median_y
+            self.endgoal = PoseStamped(header=path.header)
+            self.endgoal.pose.position.x = float(np.mean(xs))
+            self.endgoal.pose.position.y = float(np.mean(ys))
         else:
             self.endgoal = None
 
-        return path, left_boundary    
+        return path, left
+
+  
 
     def filter_continuous_boundary(self, boundary):
         """

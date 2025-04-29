@@ -73,7 +73,7 @@ def normalize_angle_error(err):
 # ───────── Exit Parking Class ────────────────────────────────────────
 class ExitParking:
     def __init__(self):
-        self.test_mode = False
+        self.test_mode = True
 
         rospy.init_node("exit_parking", anonymous=True)
         self.rate = rospy.Rate(10)
