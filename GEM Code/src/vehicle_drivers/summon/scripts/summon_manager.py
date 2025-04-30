@@ -65,6 +65,12 @@ class SummonManager:
         self.ep_turn_sub   = rospy.Subscriber('/EP_OUTPUT/turn_cmd', PacmodCmd, self.ep_turn_callback)
         self.ep_steer_sub  = rospy.Subscriber('/EP_OUTPUT/steer_cmd', PositionWithSpeed, self.ep_steer_callback)
 
+        # Arrival module communication
+        self.arrived_sub = rospy.Subscriber('/ARRIVAL/arrived', Bool, self.arrived_callback)
+        self.arrival_goal_lat_pub = rospy.Publisher('/ARRIVAL/goal_lat', Float64, queue_size=1, latch=True)
+        self.arrival_goal_long_pub = rospy.Publisher('/ARRIVAL/goal_long', Float64, queue_size=1, latch=True)
+
+
         # ======== Store latest mirror commands ========
         # Lane Following commands
         self.lf_enable_msg = Bool()
@@ -111,8 +117,9 @@ class SummonManager:
         rospy.spin()
 
 
-        
-
+    def arrived_callback(self, msg):
+        rospy.loginfo(f"Arrival status: {msg.data}")
+        # TODO: add logic to stop vehicle or transition FSM on arrival
 
     # ---------------------------------------------------------------------
     # Callback to mux the enable_sub signal based on fsm_state.
