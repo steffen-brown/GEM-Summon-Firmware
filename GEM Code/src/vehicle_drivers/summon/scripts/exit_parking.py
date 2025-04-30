@@ -73,7 +73,7 @@ def normalize_angle_error(err):
 # ───────── Exit Parking Class ────────────────────────────────────────
 class ExitParking:
     def __init__(self):
-        self.test_mode = True
+        self.test_mode = False
 
         rospy.init_node("exit_parking", anonymous=True)
         self.rate = rospy.Rate(10)
@@ -525,9 +525,9 @@ class ExitParking:
         if f_delta_deg <= 30 and f_delta_deg >= -30:
             self.turn_cmd.ui16_cmd = 1
         elif f_delta_deg > 30:
-            self.turn_cmd.ui16_cmd = 2  # turn left
+            self.turn_cmd.ui16_cmd = 0  # turn left
         else:
-            self.turn_cmd.ui16_cmd = 0  # turn right
+            self.turn_cmd.ui16_cmd = 2  # turn right
 
     def log_heading(self):
         # If we haven't started turning yet, record the initial heading (will only be done once)
@@ -628,7 +628,7 @@ class ExitParking:
             ## ****************** Tunable Parameter ***************************
             # (Neel :) Define the threshold distance from which the car needs
             #          to stop before making the full turn.
-            threshold = 0  # meters = around 10.5 feet
+            threshold = 1.42  # meters = around 10.5 feet
 
             if self.updated_lane_distance is None:
                 self.updated_lane_distance = self.lane_distance
@@ -682,7 +682,7 @@ class ExitParking:
                     # If the cumulative heading change is less than 90°,
                     # maintain maximum steering; otherwise, set steering to zero.
                     ## *************** Apply Max Turning ****************
-                    if heading_change < (90):
+                    if heading_change < (80):
                         self.steer_cmd.angular_position = math.radians(max_steering_deg)
                         rospy.loginfo_throttle(
                             1.0,
@@ -694,12 +694,23 @@ class ExitParking:
                     # ******** Finished Turning; Apply Zero Steering & Exit Loop *********
                     else:
                         self.steer_cmd.angular_position = 0.0
-                        rospy.loginfo(
-                            "90 degree turn accomplished. Steering set to zero."
-                        )
+                        rospy.loginfo("90 degree turn accomplished. Steering set to zero.")
+
+                        # Apply brake at 0.8
+                        self.brake_cmd.enable = True
+                        self.brake_cmd.clear = False
+                        self.brake_cmd.ignore = False
+                        self.brake_cmd.f64_cmd = 0.5
+                        self.brake_pub.publish(self.brake_cmd)
+                        rospy.loginfo("Brake applied at 0.8")
+
+                        # Wait for 2 seconds
+                        rospy.sleep(2.0)
+
                         # Publish zero steering to confirm command
                         self.steer_pub.publish(self.steer_cmd)
-                        # Phase 3: Disable exit parking mode and hand over control
+
+                        # Disable exit parking mode
                         self.active_pub.publish(Bool(data=False))
                         rospy.loginfo("Exit parking complete. PID control activated.")
                         break  # Exit run loop

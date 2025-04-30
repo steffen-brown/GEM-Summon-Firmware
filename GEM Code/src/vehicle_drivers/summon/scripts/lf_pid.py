@@ -40,7 +40,7 @@ class LaneFollowController:
         - Vehicle state variables and command messages
         """
 
-        self.test_mode = True
+        self.test_mode = False
 
         # Initialize ROS node
         rospy.init_node('lane_follow_controller', anonymous=True)
@@ -225,7 +225,7 @@ class LaneFollowController:
         """
         while not rospy.is_shutdown():
             if not self.test_mode:
-                while self.module_active:
+                while (self.module_active == False):
                     pass
             ###############################################################################
             # Vehicle Initialization
