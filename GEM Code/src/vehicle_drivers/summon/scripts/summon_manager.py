@@ -118,7 +118,14 @@ class SummonManager:
 
     def arrived_callback(self, msg):
         rospy.loginfo(f"Arrival status: {msg.data}")
-        # TODO: add logic to stop vehicle or transition FSM on arrival
+
+        if msg.data:
+            # 1. Disable any active controllers
+            self.lane_detection_active_pub.publish(Bool(data=False))
+            self.exit_parking_active_pub.publish(Bool(data=False))
+
+            # 2. Go to IDLE ⇒ parking gear + full brake
+            self.set_fsm_state(0)          # publish_muxed_commands() is called inside
 
     # ---------------------------------------------------------------------
     # Callback to mux the enable_sub signal based on fsm_state.
@@ -239,6 +246,9 @@ class SummonManager:
             self.first_goal_long = msg.data
             self.init_goal_long = True
         self.goal_long = msg.data
+
+        self.arrival_goal_long_pub.publish(Float64(data=msg.data))
+
         self.update_exit_direction()
         if self.fsm_state == 0:
             self.pull_out_activator()
@@ -249,6 +259,9 @@ class SummonManager:
             self.first_goal_lat = msg.data
             self.init_goal_lat = True
         self.goal_lat = msg.data
+
+        self.arrival_goal_lat_pub.publish(Float64(data=msg.data))
+
         self.update_exit_direction()
         if self.fsm_state == 0:
             self.pull_out_activator()
