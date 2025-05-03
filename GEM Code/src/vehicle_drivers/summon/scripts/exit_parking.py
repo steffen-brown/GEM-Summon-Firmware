@@ -628,7 +628,7 @@ class ExitParking:
             ## ****************** Tunable Parameter ***************************
             # (Neel :) Define the threshold distance from which the car needs
             #          to stop before making the full turn.
-            threshold = 1.42  # meters = around 10.5 feet
+            threshold = 0.8  # meters = around 10.5 feet
 
             if self.updated_lane_distance is None:
                 self.updated_lane_distance = self.lane_distance
@@ -704,11 +704,12 @@ class ExitParking:
                         self.brake_pub.publish(self.brake_cmd)
                         rospy.loginfo("Brake applied at 0.8")
 
-                        # Wait for 2 seconds
-                        rospy.sleep(2.0)
 
                         # Publish zero steering to confirm command
                         self.steer_pub.publish(self.steer_cmd)
+
+                                                # Wait for 2 seconds
+                        rospy.sleep(5.0)
 
                         # Disable exit parking mode
                         self.active_pub.publish(Bool(data=False))

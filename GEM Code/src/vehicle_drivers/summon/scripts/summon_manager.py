@@ -26,8 +26,7 @@ class SummonManager:
         # New subscriber for the pacmod enable signal
         self.enable_sub = rospy.Subscriber("/pacmod/as_tx/enable", Bool, self.pacmod_enable_callback)
 
-        # Webapp interaction
-        self.status_pub    = rospy.Publisher('/WEBAPP/status', Int32, queue_size=1, latch=True)
+        # Webapp interactionenable/status', Int32, queue_size=1, latch=True)
         self.goal_long_sub = rospy.Subscriber('/WEBAPP/goal_long', Float64, self.goal_long_callback)
         self.goal_lat_sub  = rospy.Subscriber('/WEBAPP/goal_lat', Float64, self.goal_lat_callback)
 
@@ -127,10 +126,10 @@ class SummonManager:
     def pacmod_enable_callback(self, msg):
         rospy.loginfo(f"Received pacmod/as_tx/enable: {msg.data}")
         if self.fsm_state == 2:
-            self.lf_enable_pub.publish(msg)
+            self.lf_enable_pub.publish(Bool(data=True))
             rospy.loginfo("Forwarded enable msg to LF_OUTPUT/enable")
         elif self.fsm_state == 1:
-            self.ep_enable_pub.publish(msg)
+            self.ep_enable_pub.publish(Bool(data=True))
             rospy.loginfo("Forwarded enable msg to EP_OUTPUT/enable")
         else:
             rospy.loginfo("FSM state is IDLE; not forwarding enable msg to mirror publishers")

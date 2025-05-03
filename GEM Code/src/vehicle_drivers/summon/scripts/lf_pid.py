@@ -57,8 +57,8 @@ class LaneFollowController:
         self.image_center_x = self.image_width / 2.0  # Image center x-coordinate
         
         # Initialize PID controllers
-        self.pid_speed = PID(kp=0.5, ki=0.0, kd=0.1, wg=20)  # Speed controller with windup guard
-        self.pid_steer = PID(kp=0.01, ki=0.0, kd=0.005)      # Steering controller
+        self.pid_speed = PID(kp=1, ki=0.0, kd=0.1, wg=20)  # Speed controller with windup guard
+        self.pid_steer = PID(kp=0.03875, ki=0.005, kd=0.0047, wg = 20)      # Steering controller
 
         ###############################################################################
         # Vehicle State Variables

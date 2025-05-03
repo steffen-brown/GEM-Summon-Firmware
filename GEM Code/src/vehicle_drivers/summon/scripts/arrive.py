@@ -1,119 +1,145 @@
 #!/usr/bin/env python3
+# ==============================================================
+# arrive.py  –  Publishes /ARRIVAL/arrived once the vehicle is
+#               both close to the goal and roughly perpendicular
+#               to it.  Uses great‑circle distance and bearing.
+# ==============================================================
 
 import rospy
 import math
 from std_msgs.msg import Bool, Float64
-from sensor_msgs.msg import NavSatFix, INSNavGeod
+from sensor_msgs.msg import NavSatFix
+from septentrio_gnss_driver.msg import INSNavGeod
 
-ANGLE_TOL    = math.radians(10)  # how close to 90 ° is acceptable
-DIST_THRESH  = 1.5               # metres
+# ─── TUNABLE CONSTANTS ─────────────────────────────────────────
+ANGLE_TOL   = math.radians(10)     # “perpendicular” band (deg → rad)
+DIST_THRESH = 3.0                  # arrival radius in metres
+R_EARTH     = 6_371_000.0          # mean Earth radius (m)
+# ───────────────────────────────────────────────────────────────
+
 
 class Arrive:
-
     def __init__(self):
         rospy.init_node('arrive', anonymous=True)
-        rospy.loginfo("Arrive node initializing...")  # init log :contentReference[oaicite:0]{index=0}
+        rospy.loginfo("Arrive node initializing…")
 
-        self.rate = rospy.Rate(10)  # 10 Hz loop
+        self.rate = rospy.Rate(10)        # 10 Hz main loop
 
-        # State variables
-        self.goal_lat     = None
-        self.goal_long    = None
-        self.curr_lat     = None
-        self.curr_long    = None
-        self.curr_heading = None
+        # Goal & state
+        self.goal_lat  = 40.092816
+        self.goal_long = -88.235527
+        self.curr_lat  = None
+        self.curr_long = None
+        self.curr_head = None   # degrees (0 = north, CW+)
 
-        # Publisher
-        self.arrived_pub = rospy.Publisher('/ARRIVAL/arrived', Bool, queue_size=1, latch=True)
+        # Pub / sub
+        self.arrived_pub = rospy.Publisher('/ARRIVAL/arrived',
+                                           Bool, queue_size=1, latch=True)
+        rospy.Subscriber("/septentrio_gnss/navsatfix",
+                         NavSatFix, self.gps_cb)
+        rospy.Subscriber("/ARRIVAL/goal_lat",
+                         Float64, self.goal_lat_cb)
+        rospy.Subscriber("/ARRIVAL/goal_long",
+                         Float64, self.goal_long_cb)
+        rospy.Subscriber("/septentrio_gnss/insnavgeod",
+                         INSNavGeod, self.ins_cb)
 
-        # Subscribers
-        rospy.Subscriber("/septentrio_gnss/navsatfix", NavSatFix, self.gps_callback)
-        rospy.Subscriber("/ARRIVAL/goal_lat", Float64, self.goal_lat_callback)
-        rospy.Subscriber("/ARRIVAL/goal_long", Float64, self.goal_long_callback)
-        rospy.Subscriber( "/septentrio_gnss/insnavgeod", INSNavGeod, self.ins_callback)
+        # Initialise “not arrived”
+        self.arrived_pub.publish(False)
+        rospy.loginfo("Arrive node ready – waiting for data.")
 
-        # Start with arrived = False
-        self.arrived_pub.publish(Bool(data=False))
-        rospy.loginfo("Arrive node initialized and waiting for data.")
+    # ─── CALLBACKS ────────────────────────────────────────────
+    def gps_cb(self, msg):
+        self.curr_lat  = msg.latitude
+        self.curr_long = msg.longitude
+        rospy.loginfo("GPS → lat %.6f  lon %.6f",
+                      self.curr_lat, self.curr_long)
 
-    def gps_callback(self, msg):
-        self.curr_lat  = round(msg.latitude,  6)
-        self.curr_long = round(msg.longitude, 6)
-        rospy.loginfo("GPS update → lat: %.6f, lon: %.6f",self.curr_lat, self.curr_long)
-
-    def goal_lat_callback(self, msg):
+    def goal_lat_cb(self, msg):
         self.goal_lat = msg.data
-        rospy.loginfo("Goal latitude set to %.6f", self.goal_lat) 
+        rospy.loginfo("Goal lat set → %.6f", self.goal_lat)
 
-    def goal_long_callback(self, msg):
+    def goal_long_cb(self, msg):
         self.goal_long = msg.data
-        rospy.loginfo("Goal longitude set to %.6f", self.goal_long)
+        rospy.loginfo("Goal lon set → %.6f", self.goal_long)
 
-    def ins_callback(self, msg):
-        self.curr_heading = round(msg.heading, 6)
-        rospy.loginfo("IMU heading update → %.6f°", self.curr_heading) 
+    def ins_cb(self, msg):
+        self.curr_head = msg.heading       # degrees
+        rospy.loginfo("Heading → %.2f°", self.curr_head)
+    # ──────────────────────────────────────────────────────────
 
+
+    # ─── MAIN LOOP ────────────────────────────────────────────
     def run(self):
-        rospy.loginfo("Arrive node is running...")
-        arrived = False 
+        rospy.loginfo("Arrive node running…")
+        arrived = False
+
+        # helper to format values that may still be None
+        def fmt(val, prec=6):
+            return f"{val:.{prec}f}" if val is not None else "—"
 
         while not rospy.is_shutdown():
-            # Wait for all inputs
-            if None in (self.goal_lat, self.goal_long,
-                        self.curr_lat, self.curr_long, self.curr_heading):
-                rospy.loginfo_throttle(5,  # seconds
-                    "Waiting for data → goal(lat,lon)=%s,%s  GPS(lat,lon)=%s,%s  heading=%s",
-                    self.goal_lat, self.goal_long,
-                    self.curr_lat, self.curr_long,
-                    self.curr_heading
-                )
+            # Wait until we have everything
+            if None in (self.curr_lat, self.curr_long, self.curr_head):
+                rospy.loginfo_throttle(
+                    5,
+                    "Waiting… goal(%s, %s)  gps(%s, %s)  head=%s",
+                    fmt(self.goal_lat), fmt(self.goal_long),
+                    fmt(self.curr_lat), fmt(self.curr_long),
+                    fmt(self.curr_head, 2))
                 self.rate.sleep()
                 continue
 
-            # 2‑flat ENU conversion
-            m_per_deg_lat = 111_132.92
-            m_per_deg_lon = (
-                111_132.92 * math.cos(math.radians(self.curr_lat)))
-            d_lat = self.goal_lat  - self.curr_lat
-            d_lon = self.goal_long - self.curr_long
-            north = d_lat * m_per_deg_lat
-            east  = d_lon * m_per_deg_lon
-            dist  = math.hypot(east, north)
+            # ── GREAT‑CIRCLE RANGE & BEARING ─────────────────
+            lat1 = math.radians(self.curr_lat)
+            lon1 = math.radians(self.curr_long)
+            lat2 = math.radians(self.goal_lat)
+            lon2 = math.radians(self.goal_long)
 
-            # 3‑flat bearing (0 = North, CW+)
-            bearing = math.atan2(east, north)
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
 
-            # Heading error wrapped to [−π, π]
-            head     = math.radians(self.curr_heading)
-            head     = (head + math.pi) % (2*math.pi) - math.pi
-            ang_diff = (bearing - head + math.pi) % (2*math.pi) - math.pi
+            # Haversine distance
+            a = (math.sin(dlat / 2) ** 2 +
+                 math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            dist = R_EARTH * c                         # metres
 
-            perpendicular = abs(math.pi/2 - abs(ang_diff)) <= ANGLE_TOL
+            # Initial bearing (CW from north)
+            y = math.sin(dlon) * math.cos(lat2)
+            x = (math.cos(lat1) * math.sin(lat2) -
+                 math.sin(lat1) * math.cos(lat2) * math.cos(dlon))
+            bearing = math.atan2(y, x)                # rad
+            bearing = (bearing + 2 * math.pi) % (2 * math.pi)
+
+            # ── ANGLE ERROR & THRESHOLDS ─────────────
+            head_rad = math.radians(self.curr_head)
+            head_rad = (head_rad + math.pi) % (2 * math.pi) - math.pi
+            ang_err  = (bearing - head_rad + math.pi) % (2 * math.pi) - math.pi
+
+            perpendicular = abs(math.pi / 2 - abs(ang_err)) <= ANGLE_TOL
             close_enough  = dist <= DIST_THRESH
 
-            # Debug log for each loop
             rospy.loginfo(
-                "dist=%.2fm  bearing=%.1f°  head=%.1f°  err=%.1f°  perp=%s  close=%s",
+                "dist %.2fm  bear %.1f°  head %.1f°  err %.1f°  ⟂ %s  close %s",
                 dist,
                 math.degrees(bearing),
-                self.curr_heading,
-                math.degrees(ang_diff),
-                perpendicular,
-                close_enough
-            ) 
+                self.curr_head,
+                math.degrees(ang_err),
+                perpendicular, close_enough)
 
-            # Publish arrival once
+            # ── ARRIVAL LATCH ────────────────────────
             if perpendicular and close_enough and not arrived:
-                self.arrived_pub.publish(Bool(data=True))
+                self.arrived_pub.publish(True)
                 rospy.loginfo("** ARRIVED **")
                 arrived = True
 
             self.rate.sleep()
+    # ──────────────────────────────────────────────────────────
 
 
 if __name__ == '__main__':
     try:
-        node = Arrive()
-        node.run()
+        Arrive().run()
     except rospy.ROSInterruptException:
         rospy.loginfo("Arrive node shut down.")
