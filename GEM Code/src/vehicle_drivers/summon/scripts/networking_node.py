@@ -34,18 +34,22 @@ class Networking:
 
         # In case we want to store the previous phone location
         self.last_phone_location = None
+        self.latest_gps = None  
+        rospy.Timer(rospy.Duration(1), self.process_latest_gps)
 
         self.update_car_status(0)
 
     def gps_callback(self, msg):
-        """
-        Callback for receiving the vehicle's current GPS location.
-        We update the Summon API with the new location.
-        """
-        current_lat = msg.latitude
-        current_lng = msg.longitude
-        rospy.loginfo(f"GPS updated -> lat: {current_lat}, lng: {current_lng}")
-        self.update_car_location(current_lat, current_lng)
+        self.latest_gps = msg  # don’t do any logging or requests here
+    
+    def process_latest_gps(self, event):
+        if self.latest_gps is not None:
+            lat = self.latest_gps.latitude
+            lng = self.latest_gps.longitude
+            rospy.loginfo(f"Fresh GPS → lat: {lat}, lng: {lng}")
+            self.update_car_location(lat, lng)  # blocking call happens here
+
+
 
     def status_callback(self, msg):
         """

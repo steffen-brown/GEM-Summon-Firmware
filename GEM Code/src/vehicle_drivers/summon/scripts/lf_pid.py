@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rospy
 import math
 import numpy as np
@@ -5,6 +7,8 @@ from std_msgs.msg import Bool
 from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
 from geometry_msgs.msg import PoseStamped
 import time
+from collections import deque      # NEW  ← add this import
+
 
 from pid import PID
 
@@ -40,7 +44,7 @@ class LaneFollowController:
         - Vehicle state variables and command messages
         """
 
-        self.test_mode = False
+        self.test_mode = True
 
         # Initialize ROS node
         rospy.init_node('lane_follow_controller', anonymous=True)
@@ -58,7 +62,13 @@ class LaneFollowController:
         
         # Initialize PID controllers
         self.pid_speed = PID(kp=1, ki=0.0, kd=0.1, wg=20)  # Speed controller with windup guard
-        self.pid_steer = PID(kp=0.03875, ki=0.005, kd=0.0047, wg = 20)      # Steering controller
+        self.pid_steer_normal = PID(kp=0.03875, ki=0.002, kd=0.003, wg=10)
+        self.pid_steer_sharp  = PID(kp=0.03875, ki=0.002, kd=0.003, wg=10)
+        self.steer_threshold = 0
+
+        # --- NEW: keep the last N commanded steering angles (radians) ---
+        self.history_len = 20                  # tune length as you like
+        self.steer_hist  = deque(maxlen=self.history_len)
 
         ###############################################################################
         # Vehicle State Variables
@@ -233,7 +243,7 @@ class LaneFollowController:
             
             # Enable vehicle if PACMOD is ready but vehicle not yet enabled
             if not self.gem_enable:
-                if self.pacmod_enable:
+                if True:
                     # Configure vehicle for autonomous mode
                     self.gear_cmd.ui16_cmd = 3  # FORWARD gear
                     
@@ -280,8 +290,21 @@ class LaneFollowController:
                 current_time = rospy.get_time()
                 
                 # Calculate steering output using PID controller
-                steering_output = self.pid_steer.get_control(current_time, lateral_error_pixels, fwd=0.0)
-                
+                self.steer_hist.append(self.steer_cmd.angular_position)
+
+                # 2. compute mean |angle| over the buffer (radians)
+                avg_abs_angle = sum(abs(a) for a in self.steer_hist) / len(self.steer_hist)
+                print(avg_abs_angle)
+
+                # 3. choose gains based on the average, **not** the instantaneous value
+                pid = (self.pid_steer_normal
+                    if avg_abs_angle < self.steer_threshold
+                    else self.pid_steer_sharp)
+
+                steering_output = pid.get_control(current_time,
+                                                lateral_error_pixels,
+                                                fwd=0.0)
+                                
                 # Convert steering output to front wheel angle
                 front_angle = -steering_output * 4.0
                 

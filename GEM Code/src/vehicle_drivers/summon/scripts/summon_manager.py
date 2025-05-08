@@ -225,7 +225,7 @@ class SummonManager:
         else:
             direction_msg = Bool(data=True)   # 1 = right
 
-        rospy.loginfo(f"Bearing: {bearing_to_goal}, heading: {self.current_heading}, relative: {relative_angle}, direction: {direction_msg.data}")
+        #rospy.loginfo(f"Bearing: {bearing_to_goal}, heading: {self.current_heading}, relative: {relative_angle}, direction: {direction_msg.data}")
         self.exit_direction_pub.publish(direction_msg)
 
     def pull_out_activator(self):
@@ -270,7 +270,7 @@ class SummonManager:
     def gps_callback(self, msg):
         self.current_lat = msg.latitude
         self.current_lon = msg.longitude
-        rospy.loginfo(f"Received GPS pos lat={self.current_lat}, lon={self.current_lon}")
+        #rospy.loginfo(f"Received GPS pos lat={self.current_lat}, lon={self.current_lon}")
 
     def insnavgeod_callback(self, msg):
         #self.current_heading = msg.heading

@@ -515,7 +515,7 @@ class ExitParking:
 
             # steering_angle in degrees
             steering_angle = self.front2steer(f_delta_deg)
-            self.turn_signal(f_delta_deg)
+            #self.turn_signal(f_delta_deg)
         else:
             # If headings are unavailable, default to straight (0) steering.
             steering_angle = 0.0
@@ -523,11 +523,11 @@ class ExitParking:
 
     def turn_signal(self, f_delta_deg):
         if f_delta_deg <= 30 and f_delta_deg >= -30:
-            self.turn_cmd.ui16_cmd = 1
+            self.turn_cmd.ui16_cmd = 0
         elif f_delta_deg > 30:
-            self.turn_cmd.ui16_cmd = 0  # turn left
+            self.turn_cmd.ui16_cmd = 1  # turn left
         else:
-            self.turn_cmd.ui16_cmd = 2  # turn right
+            self.turn_cmd.ui16_cmd = 2 # turn right
 
     def log_heading(self):
         # If we haven't started turning yet, record the initial heading (will only be done once)
@@ -595,10 +595,7 @@ class ExitParking:
             self.gear_cmd.ui16_cmd = 3  # Forward gear
             self.gear_pub.publish(self.gear_cmd)
             self.enable_pub.publish(Bool(data=True))
-            rospy.loginfo("PACMOD interface ready for simulation.")
-        ##  ***************************************************
-
-        ## (Neel :) lets first wait for the first image to calcualte distance from lane b4 proceeding
+            #rospy.loginfo("PACMOD interface ready for simulation5## (Neel :) lets first wait for the first i56mage to calcualte distance from lane b4 proceeding
         while self.lane_distance is None and not rospy.is_shutdown():
             rospy.loginfo_throttle(
                 2.0, "calculating nearest lane distance from image data..."
@@ -682,7 +679,7 @@ class ExitParking:
                     # If the cumulative heading change is less than 90°,
                     # maintain maximum steering; otherwise, set steering to zero.
                     ## *************** Apply Max Turning ****************
-                    if heading_change < (80):
+                    if heading_change < (70):
                         self.steer_cmd.angular_position = math.radians(max_steering_deg)
                         rospy.loginfo_throttle(
                             1.0,

@@ -1,19 +1,22 @@
 <launch>
-  <!-- Exit Parking Node -->
-  <node pkg="summon" type="exit_parking.py" name="exit_parking" output="screen"/>
+    <!-- Lane Detection -->
+    <node pkg="gem_pacmod_control" type="lane_detection.py" name="lane_detection" output="screen"/>
 
-  <!-- Lane Detection Node -->
-  <node pkg="summon" type="lane_detection.py" name="lane_detection_node" output="screen"/>
+    <!-- Object Avoidance -->
+    <node pkg="gem_pacmod_control" type="object_avoidance.py" name="object_avoidance" output="screen"/>
 
-  <!-- Lane Following PID Controller -->
-  <node pkg="summon" type="lf_pid.py" name="lane_follow_controller" output="screen"/>
+    <!-- Summon Manager -->
+    <node pkg="gem_pacmod_control" type="summon_manager.py" name="summon_manager" output="screen"/>
 
-  <!-- Networking Node (WebApp communication) -->
-  <node pkg="summon" type="networking_node.py" name="networking" output="screen"/>
+    <!-- Networking Node -->
+    <node pkg="gem_pacmod_control" type="networking_node.py" name="networking_node" output="screen"/>
 
-  <!-- Object Avoidance Node -->
-  <node pkg="summon" type="object_avoidance.py" name="object_avoidance" output="screen"/>
+    <!-- Arrive Logic -->
+    <node pkg="gem_pacmod_control" type="arrive.py" name="arrive" output="screen"/>
 
-  <!-- Summon Manager Node -->
-  <node pkg="summon" type="summon_manager.py" name="summon_manager" output="screen"/>
+    <!-- Exit Parking Logic -->
+    <node pkg="gem_pacmod_control" type="exit_parking.py" name="exit_parking" output="screen"/>
+
+    <!-- Lane Follow PID -->
+    <node pkg="gem_pacmod_control" type="lf_pid.py" name="lf_pid" output="screen"/>
 </launch>

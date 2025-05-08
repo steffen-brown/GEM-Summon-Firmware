@@ -13,7 +13,7 @@ from septentrio_gnss_driver.msg import INSNavGeod
 
 # ─── TUNABLE CONSTANTS ─────────────────────────────────────────
 ANGLE_TOL   = math.radians(10)     # “perpendicular” band (deg → rad)
-DIST_THRESH = 3.0                  # arrival radius in metres
+DIST_THRESH = 9.0                  # arrival radius in metres
 R_EARTH     = 6_371_000.0          # mean Earth radius (m)
 # ───────────────────────────────────────────────────────────────
 
@@ -26,8 +26,8 @@ class Arrive:
         self.rate = rospy.Rate(10)        # 10 Hz main loop
 
         # Goal & state
-        self.goal_lat  = 40.092816
-        self.goal_long = -88.235527
+        self.goal_lat  = None
+        self.goal_long = None
         self.curr_lat  = None
         self.curr_long = None
         self.curr_head = None   # degrees (0 = north, CW+)
@@ -95,6 +95,9 @@ class Arrive:
             lon1 = math.radians(self.curr_long)
             lat2 = math.radians(self.goal_lat)
             lon2 = math.radians(self.goal_long)
+
+            print(self.goal_lat)
+            print(self.goal_long)
 
             dlat = lat2 - lat1
             dlon = lon2 - lon1
