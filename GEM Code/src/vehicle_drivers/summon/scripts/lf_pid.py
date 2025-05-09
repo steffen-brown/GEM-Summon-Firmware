@@ -44,7 +44,7 @@ class LaneFollowController:
         - Vehicle state variables and command messages
         """
 
-        self.test_mode = True
+        self.test_mode = False
 
         # Initialize ROS node
         rospy.init_node('lane_follow_controller', anonymous=True)
@@ -62,8 +62,8 @@ class LaneFollowController:
         
         # Initialize PID controllers
         self.pid_speed = PID(kp=1, ki=0.0, kd=0.1, wg=20)  # Speed controller with windup guard
-        self.pid_steer_normal = PID(kp=0.03875, ki=0.002, kd=0.003, wg=10)
-        self.pid_steer_sharp  = PID(kp=0.03875, ki=0.002, kd=0.003, wg=10)
+        self.pid_steer_normal = PID(kp=0.04, ki=0.003, kd=0.015, wg=10)
+        self.pid_steer_sharp  = PID(kp=0.04, ki=0.003, kd=0.015, wg=10)
         self.steer_threshold = 0
 
         # --- NEW: keep the last N commanded steering angles (radians) ---
@@ -333,7 +333,7 @@ class LaneFollowController:
                 now = rospy.get_time()
                 self.logger.writerow([
                     f"{now:.3f}",
-                    f"{steering_angle:.3f}",
+                    f"{lateral_error_pixels:.3f}",
                     f"{math.degrees(self.steer_cmd.angular_position):.3f}"
                 ])
                 self.log_file.flush()

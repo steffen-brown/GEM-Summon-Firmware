@@ -14,7 +14,7 @@ import csv, datetime as dt, os
 
 # ─── TUNABLE CONSTANTS ─────────────────────────────────────────
 ANGLE_TOL   = math.radians(10)     # “perpendicular” band (deg → rad)
-DIST_THRESH = 9.0                  # arrival radius in metres
+DIST_THRESH = 10.0                  # arrival radius in metres
 R_EARTH     = 6_371_000.0          # mean Earth radius (m)
 # ───────────────────────────────────────────────────────────────
 
