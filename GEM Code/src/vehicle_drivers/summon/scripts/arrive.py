@@ -10,6 +10,7 @@ import math
 from std_msgs.msg import Bool, Float64
 from sensor_msgs.msg import NavSatFix
 from septentrio_gnss_driver.msg import INSNavGeod
+import csv, datetime as dt, os 
 
 # ─── TUNABLE CONSTANTS ─────────────────────────────────────────
 ANGLE_TOL   = math.radians(10)     # “perpendicular” band (deg → rad)
@@ -21,6 +22,23 @@ R_EARTH     = 6_371_000.0          # mean Earth radius (m)
 class Arrive:
     def __init__(self):
         rospy.init_node('arrive', anonymous=True)
+
+        # 2 a.  Make sure the folder exists
+        log_dir = os.path.join('.', 'data', 'car_location')
+        os.makedirs(log_dir, exist_ok=True)
+
+        # 2 b.  Build a timestamped filename
+        fname = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
+        self._csv_path = os.path.join(log_dir, fname)
+
+        # 2 c.  Open the file & keep the handle
+        self._csv_file   = open(self._csv_path, mode='w', newline='')
+        self._csv_writer = csv.writer(self._csv_file)
+        self._csv_writer.writerow(['timestamp', 'longitude', 'latitude'])  # header
+
+        # right after you open the file
+        rospy.on_shutdown(self._close_log)
+
         rospy.loginfo("Arrive node initializing…")
 
         self.rate = rospy.Rate(10)        # 10 Hz main loop
@@ -52,8 +70,15 @@ class Arrive:
     def gps_cb(self, msg):
         self.curr_lat  = msg.latitude
         self.curr_long = msg.longitude
-        rospy.loginfo("GPS → lat %.6f  lon %.6f",
-                      self.curr_lat, self.curr_long)
+        rospy.loginfo("GPS → lat %.6f  lon %.6f", self.curr_lat, self.curr_long)
+
+        # append one line to the CSV and flush so nothing sits in a buffer
+        self._csv_writer.writerow([
+            dt.datetime.now().isoformat(timespec="seconds"),
+            self.curr_long,
+            self.curr_lat
+        ])
+        self._csv_file.flush()
 
     def goal_lat_cb(self, msg):
         self.goal_lat = msg.data
@@ -68,6 +93,10 @@ class Arrive:
         rospy.loginfo("Heading → %.2f°", self.curr_head)
     # ──────────────────────────────────────────────────────────
 
+    def _close_log(self):
+        if not self._csv_file.closed:
+            self._csv_file.close()
+            rospy.loginfo("Location CSV closed.")
 
     # ─── MAIN LOOP ────────────────────────────────────────────
     def run(self):

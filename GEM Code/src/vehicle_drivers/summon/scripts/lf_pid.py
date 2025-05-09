@@ -8,7 +8,7 @@ from pacmod_msgs.msg import PositionWithSpeed, PacmodCmd, VehicleSpeedRpt
 from geometry_msgs.msg import PoseStamped
 import time
 from collections import deque      # NEW  ← add this import
-
+import csv, os, datetime            # NEW
 
 from pid import PID
 
@@ -150,6 +150,24 @@ class LaneFollowController:
         self.steer_cmd.angular_velocity_limit = 3.5  # Maximum steering rate
 
         self.module_active = False
+
+        # ─── CSV‑logger setup ───────────────────────────────────────────────
+        stamp = datetime.datetime.now().strftime("%Y‑%m‑%d_%H‑%M‑%S")
+        log_dir = os.path.join('.', 'data', 'pid')
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_path = os.path.join(log_dir, f"pid_{stamp}.csv")
+        self.log_file = open(self.log_path, "w", newline="")
+        self.logger   = csv.writer(self.log_file)
+        self.logger.writerow(["time_s",
+                              "goal_steer_deg",
+                              "curr_steer_deg"])
+        rospy.loginfo(f"[PID‑LOGGER] writing to {self.log_path}")
+        rospy.on_shutdown(self._close_log)
+
+    def _close_log(self):
+        if hasattr(self, "log_file") and not self.log_file.closed:
+            self.log_file.close()
+            rospy.loginfo("[PID‑LOGGER] CSV closed")
 
     def active_callback(self, msg):
         self.module_active = msg.data
@@ -310,6 +328,16 @@ class LaneFollowController:
                 
                 # Convert front wheel angle to steering wheel angle
                 steering_angle = self.front2steer(front_angle)
+
+                # ─── CSV log (time, goal°, current°) ─────────────────────
+                now = rospy.get_time()
+                self.logger.writerow([
+                    f"{now:.3f}",
+                    f"{steering_angle:.3f}",
+                    f"{math.degrees(self.steer_cmd.angular_position):.3f}"
+                ])
+                self.log_file.flush()
+                # ─────────────────────────────────────────────────────────
                 
                 ###############################################################################
                 # Speed Control
