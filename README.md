@@ -94,7 +94,7 @@ flowchart LR
     %% Module activations from SummonManager
     SM -->|/EXIT_PARK/active| E
     SM -->|/LANE_DETECTION/active| F
-    ```      ← closes the mermaid block
+```      ← closes the mermaid block
 
 
 ### SummonManager: Orchestration Logic
