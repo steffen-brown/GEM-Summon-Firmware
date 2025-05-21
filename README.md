@@ -44,47 +44,40 @@ The result is a **portable reference design** suitable for many small-EV platfor
 ## System Architecture
 
 ```mermaid
+%% GEM e2 Summon System – GitHub-safe Mermaid (no :::, no mid-block %%)
 flowchart LR
-    %% ──────────────────────────────────────────────
-    %%  Client side
-    %% ──────────────────────────────────────────────
-    subgraph Client["Client&nbsp;Side"]
+    %% ───────── Client side ─────────
+    subgraph Client_Side ["Client Side"]
         direction LR
-        WebApp["Web&nbsp;App<br/>React&nbsp;18"]
-        WebApp -- "HTTPS&nbsp;+&nbsp;JWT" --> API["Flask&nbsp;REST&nbsp;API"]
+        WebApp["Web App<br/>React&nbsp;18"]
+        WebApp -- "HTTPS&nbsp;+&nbsp;JWT" --> API["Flask REST&nbsp;API"]
     end
-    API -- "rosbridge&nbsp;WebSocket" --> Bridge[rosbridge_server]
+    API -- "rosbridge&nbsp;WS" --> Bridge[rosbridge_server]
     Bridge -- "pub&nbsp;/&nbsp;sub" --> Core((roscore))
 
-    %% ──────────────────────────────────────────────
-    %%  Sensors (ordered to align with modules)
-    %% ──────────────────────────────────────────────
-    subgraph Sensors["On-board&nbsp;Sensors"]
+    %% ───────── Sensors ─────────
+    subgraph Onboard_Sensors ["On-board Sensors"]
         direction TB
-        SC["Stereo&nbsp;Camera"]
+        SC["Stereo Camera"]
         IMU["IMU"]
-        LIDAR["Ouster&nbsp;OS1-128"]
+        LIDAR["Ouster OS1-128"]
         GPS["GPS"]
     end
 
-    %% ──────────────────────────────────────────────
-    %%  Modules (ordered to minimise crossings)
-    %% ──────────────────────────────────────────────
-    subgraph Modules["Perception&nbsp;/&nbsp;Control&nbsp;Nodes"]
+    %% ───────── Modules ─────────
+    subgraph Modules ["Perception / Control Nodes"]
         direction TB
-        LF["PID&nbsp;Lane-Follow"]   
-        EP["Exit-Parking&nbsp;FSM"]    
-        ROI["LiDAR&nbsp;ROI<br/>Collision-Stop"] 
-        ARR["Arrival&nbsp;Checker"]    
+        LF["PID Lane-Follow"]
+        EP["Exit-Parking FSM"]
+        ROI["LiDAR ROI<br/>Collision-Stop"]
+        ARR["Arrival Checker"]
     end
 
-    %% ──────────────────────────────────────────────
-    %%  Orchestrator & Actuation
-    %% ──────────────────────────────────────────────
-    SM["SummonManager"]:::orchestrator
-    VB["Vehicle&nbsp;Base<br/>(PACMod)"]:::vehicle
+    %% ───────── Orchestrator & Actuation ─────────
+    SM["SummonManager"]
+    VB["Vehicle Base<br/>(PACMod)"]
 
-    %% Sensor → module feeds (parallel arrows, minimal crossing)
+    %% Sensor → module feeds
     SC  --> LF
     SC  --> EP
     IMU --> EP
@@ -92,11 +85,11 @@ flowchart LR
     GPS --> ARR
     GPS --> SM
 
-    %% Module → SummonManager (status / cmd outputs)
-    LF  -->|LF_OUTPUT|  SM
-    EP  -->|EP_OUTPUT|  SM
-    ROI -->|/OBJECT_DETECTION| SM
-    ARR -->|/ARRIVAL/arrived|  SM
+    %% Module → SummonManager
+    LF  -->|LF_OUTPUT|          SM
+    EP  -->|EP_OUTPUT|          SM
+    ROI -->|/OBJECT_DETECTION|  SM
+    ARR -->|/ARRIVAL/arrived|   SM
 
     %% SummonManager → module activations
     SM -->|/LANE_DETECTION/active| LF
@@ -105,9 +98,12 @@ flowchart LR
     %% SummonManager → Vehicle Base
     SM -->|/pacmod/as_rx/*| VB
 
-    %% Visual groups
+    %% ───────── Styling (classic syntax) ─────────
     classDef orchestrator fill:#d9d9ff,stroke:#333;
     classDef vehicle      fill:#ffd9d9,stroke:#333;
+    class SM orchestrator;
+    class VB vehicle;
+
 
 
 
