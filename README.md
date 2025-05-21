@@ -138,8 +138,10 @@ Activates modules and multiplexes PACMod commands.
 | **1** EXIT         | Exit-Parking FSM   | `/EP_OUTPUT/*`      |
 | **2** LANE FOLLOW  | PID Lane-Follow    | `/LF_OUTPUT/*`      |
 
-Emergency logic:
-```text
+---
+
+### Emergency logic
+
 /OBJECT_DETECTION/stop     → full brake  
 /OBJECT_DETECTION/restart  → resume last state
 
