@@ -95,21 +95,53 @@ flowchart LR
     SM -->|/EXIT_PARK/active| E
     SM -->|/LANE_DETECTION/active| F
 ```
+## Key Algorithms
 
-
-### SummonManager: Orchestration Logic
-
-The `SummonManager` node acts as the central orchestrator, coordinating all autonomous modules based on a finite state machine (FSM). It selectively activates modules, routes PACMod commands, and handles emergency behavior.
+### Exit-Parking FSM  
+Pulls the vehicle smoothly out of a diagonal bay.  
+* Inputs : Stereo Camera + IMU  
+* Tuned parameters : pull-forward distance, heading correction  
+* RMS lateral error during exit : **≤ 0.10 m**
 
 ---
 
-#### FSM States
+### PID Lane-Follow  
+Enhanced Stanley/PID hybrid that tracks centerline on straights and curves.  
+* Sensor : Stereo Camera  
+* RMS lane error (straight) : **0.07 m**  
+* RMS lane error (curve) : **0.15 m**
 
-| State | Name            | Description                                                                  |
-| ----- | --------------- | ---------------------------------------------------------------------------- |
-| `0`   | **IDLE**        | Vehicle remains stationary (Park + Brake). Awaiting GPS goal input.          |
-| `1`   | **EXIT**        | Exit-Parking FSM is activated. SummonManager relays `/EP_OUTPUT/*` commands. |
-| `2`   | **LANE FOLLOW** | PID Lane-Follow is activated. SummonManager relays `/LF_OUTPUT/*` commands.  |
+---
+
+### LiDAR ROI Collision-Stop  
+Real-time obstacle detection using an OS1-128 ROI.  
+* ROI bounds : `0.5 m < x < 5 m`, `|y| < 1 m`, `ring 62–128`  
+* Obstacle threshold : 50 points inside ROI  
+* Stop accuracy : **100 %** (50/50 trials)
+
+---
+
+### Arrival Checker  
+Stops the vehicle exactly at the summon point.  
+* Condition 1 : GPS distance to goal < **4 m**  
+* Condition 2 : Vehicle heading ⟂ goal vector (± 15°)  
+* Outputs : `/ARRIVAL/arrived` flag to SummonManager
+
+---
+
+### SummonManager (FSM Orchestrator)  
+Activates modules and multiplexes PACMod commands.  
+
+| State | Active Module     | PACMod Source     |
+|-------|-------------------|-------------------|
+| **0** IDLE         | –                  | Park + full brake   |
+| **1** EXIT         | Exit-Parking FSM   | `/EP_OUTPUT/*`      |
+| **2** LANE FOLLOW  | PID Lane-Follow    | `/LF_OUTPUT/*`      |
+
+Emergency logic:
+```text
+/OBJECT_DETECTION/stop     → full brake  
+/OBJECT_DETECTION/restart  → resume last state
 
 ---
 
@@ -178,7 +210,7 @@ These conditions are computed from GPS (`/navsatfix`) and INS heading.
 
 If an obstacle is detected, SummonManager overrides control and holds full brake. Once cleared, FSM resumes automatically.
 
-
+## Quick Start
 
 
 
