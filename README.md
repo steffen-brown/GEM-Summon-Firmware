@@ -95,6 +95,86 @@ flowchart LR
     SM -->|/EXIT_PARK/active| E
     SM -->|/LANE_DETECTION/active| F
 
+### 🧠 SummonManager: Orchestration Logic
+
+The `SummonManager` node acts as the central orchestrator, coordinating all autonomous modules based on a finite state machine (FSM). It selectively activates modules, routes PACMod commands, and handles emergency behavior.
+
+---
+
+#### 🚦 FSM States
+
+| State | Name            | Description                                                                  |
+| ----- | --------------- | ---------------------------------------------------------------------------- |
+| `0`   | **IDLE**        | Vehicle remains stationary (Park + Brake). Awaiting GPS goal input.          |
+| `1`   | **EXIT**        | Exit-Parking FSM is activated. SummonManager relays `/EP_OUTPUT/*` commands. |
+| `2`   | **LANE FOLLOW** | PID Lane-Follow is activated. SummonManager relays `/LF_OUTPUT/*` commands.  |
+
+---
+
+### 🔁 Data Flow Summary
+
+| Source              | Topic                                 | Role                             |
+| ------------------- | ------------------------------------- | -------------------------------- |
+| Web App             | `/WEBAPP/goal_lat`, `/goal_long`      | Provides target GPS location     |
+| GPS Receiver        | `/navsatfix`                          | Supplies current position        |
+| Arrival Checker     | `/ARRIVAL/arrived`                    | Triggers final stop condition    |
+| Object Detection    | `/OBJECT_DETECTION/stop` / `/restart` | Triggers emergency stop/resume   |
+| Exit-Parking Module | `/EP_OUTPUT/*`                        | Sends control commands (State 1) |
+| Lane-Follow Module  | `/LF_OUTPUT/*`                        | Sends control commands (State 2) |
+
+---
+
+### 🧱 Command Multiplexing by FSM State
+
+```plaintext
+FSM:        [IDLE]         [EXIT]           [LANE FOLLOW]
+------------------------------------------------------------
+Enable:     True           EP_ENABLE        LF_ENABLE
+Gear:       PARK           EP_GEAR          LF_GEAR
+Steer:      0.0            EP_STEER         LF_STEER
+Accel:      0.0            EP_ACCEL         LF_ACCEL
+Brake:      1.0 (Full)     EP_BRAKE         LF_BRAKE
+```
+
+---
+
+### ✅ Activation Logic
+
+```python
+if fsm_state == 1:
+    self.exit_parking_active_pub.publish(True)
+    self.lane_detection_active_pub.publish(False)
+elif fsm_state == 2:
+    self.exit_parking_active_pub.publish(False)
+    self.lane_detection_active_pub.publish(True)
+else:
+    self.exit_parking_active_pub.publish(False)
+    self.lane_detection_active_pub.publish(False)
+```
+
+> SummonManager switches which module is “active” and routes PACMod commands from that module to `/pacmod/as_rx/*`.
+
+---
+
+### 🎯 Arrival Detection
+
+Vehicle transitions to IDLE and stops when:
+
+* Distance to target < `4.0 meters`, and
+* Heading vector is perpendicular to target vector
+
+These conditions are computed from GPS (`/navsatfix`) and INS heading.
+
+---
+
+### 🚧 Obstacle Handling
+
+```text
+/OBJECT_DETECTION/stop     → Triggers emergency brake
+/OBJECT_DETECTION/restart  → Resumes from last FSM state
+```
+
+If an obstacle is detected, SummonManager overrides control and holds full brake. Once cleared, FSM resumes automatically.
 
 
 
