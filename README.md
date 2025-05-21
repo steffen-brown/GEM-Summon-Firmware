@@ -44,70 +44,56 @@ The result is a **portable reference design** suitable for many small-EV platfor
 ## System Architecture
 
 ```mermaid
-flowchart TD
-    %% ─────────────────────────────────────────────────────
-    %%  Client side  (row 1)
-    %% ─────────────────────────────────────────────────────
-    subgraph Client["Client&nbsp;Side"]
-        direction LR
-        WebApp["Web&nbsp;App<br/>React&nbsp;18"]
-        WebApp -- "HTTPS&nbsp;+&nbsp;JWT" --> API["Flask&nbsp;REST&nbsp;API"]
+flowchart LR
+    %% ---------- Client side ----------
+    subgraph Client_Side["Client&nbsp;Side"]
+        A["Web&nbsp;App<br/>React 18"]
+        A -- "HTTPS&nbsp;+&nbsp;JWT" --> B["Flask&nbsp;REST&nbsp;API"]
     end
-    API -- "rosbridge&nbsp;WS" --> Bridge[rosbridge_server]
-    Bridge -- "pub&nbsp;/&nbsp;sub" --> Core((roscore))
 
-    %% ─────────────────────────────────────────────────────
-    %%  On-board sensors  (row 2)
-    %% ─────────────────────────────────────────────────────
+    B -- "rosbridge&nbsp;WebSocket" --> C[rosbridge_server]
+    C -- "pub&nbsp;/&nbsp;sub" --> D((roscore))
+
+    %% ---------- Sensors ----------
     subgraph Sensors["On-board&nbsp;Sensors"]
-        direction LR
         SC["Stereo&nbsp;Camera"]
         IMU["IMU"]
         LIDAR["Ouster&nbsp;OS1-128"]
         GPS["GPS"]
     end
 
-    %% ─────────────────────────────────────────────────────
-    %%  Perception & control modules  (row 3)
-    %% ─────────────────────────────────────────────────────
-    subgraph Modules["Perception&nbsp;&nbsp;/&nbsp;&nbsp;Control"]
-        direction LR
-        EP["Exit-Parking<br/>FSM"]
-        LF["PID&nbsp;Lane-Follow"]
-        ROI["LiDAR&nbsp;ROI<br/>Collision-Stop"]
-        ARR["Arrival&nbsp;Checker"]
-    end
+    %% ---------- Perception / control nodes ----------
+    E["Exit-Parking FSM"]
+    F["PID&nbsp;Lane-Follow"]
+    G["LiDAR ROI<br/>Collision-Stop"]
+    H["Arrival&nbsp;Checker"]
 
-    %% ─────────────────────────────────────────────────────
-    %%  Orchestrator + actuation  (row 4)
-    %% ─────────────────────────────────────────────────────
-    SM["SummonManager"]:::orchestrator
-    VB["Vehicle&nbsp;Base<br/>(PACMod)"]:::vehicle
+    %% ---------- Orchestrator ----------
+    SM["SummonManager"]
 
-    %% ───── Sensor → module feeds ─────
-    SC  --> EP & LF
-    IMU --> EP
-    LIDAR --> ROI
-    GPS --> ARR & SM
+    %% ---------- Actuation ----------
+    VB["Vehicle&nbsp;Base<br/>(PACMod)"]
 
-    %% ───── Module → SummonManager (status / commands) ─────
-    EP  -->|EP_OUTPUT| SM
-    LF  -->|LF_OUTPUT| SM
-    ROI -->|/OBJECT_DETECTION| SM
-    ARR -->|/ARRIVAL/arrived| SM
+    %% ---------- Data flows ----------
+    D -->|cmd_mux<br/>&amp; state| SM
+    SM -->|/enable, /steer,<br/>/accel, /brake| VB
 
-    %% ───── SummonManager → module activations ─────
-    SM -->|/EXIT_PARK/active| EP
-    SM -->|/LANE_DETECTION/active| LF
+    %% Sensor feeds
+    SC --> E & F
+    IMU --> E
+    LIDAR --> G
+    GPS --> SM & H
 
-    %% ───── SummonManager → Vehicle Base (PACMod) ─────
-    SM -->|/pacmod/as_rx/*| VB
+    %% Module outputs to SummonManager
+    E -->|EP_OUTPUT/*| SM
+    F -->|LF_OUTPUT/*| SM
+    G -->|/OBJECT_DETECTION| SM
+    H -->|/ARRIVAL/arrived| SM
 
-    %% ─────────────────────────────────────────────────────
-    %%  Styling helper classes
-    %% ─────────────────────────────────────────────────────
-    classDef orchestrator fill:#d9d9ff,stroke:#333;
-    classDef vehicle      fill:#ffd9d9,stroke:#333;
+    %% Module activations from SummonManager
+    SM -->|/EXIT_PARK/active| E
+    SM -->|/LANE_DETECTION/active| F
+
 
 
 
