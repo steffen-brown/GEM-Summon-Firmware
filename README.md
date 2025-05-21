@@ -45,20 +45,24 @@ The result is a **portable reference design** suitable for many small-EV platfor
 
 ```mermaid
 flowchart LR
-  subgraph Client Side
-    A[Web App<br>(React 18)]
-    A -->|HTTPS + JWT| B[Flask REST API]
-  end
-  B -->|ROSBridge<br>WebSocket| C[rosbridge_server]
-  C -->|pub/sub| D((roscore))
-  
-  subgraph GEM e2
-    D --> E[Exit-Parking FSM]
-    D --> F[PID Lane-Follow]
-    D --> G[LiDAR ROI<br>Collision-Stop]
-    D --> H[Arrival Checker]
-    G -->|/cmd_vel| V[Vehicle Base]
-    V -->|LiDAR scan| L(Ouster OS1-128)
-  end
+    %% ---------- Client side ----------
+    subgraph Client_Side["Client Side"]
+        A["Web App<br/>React 18"]
+        A -- "HTTPS + JWT" --> B["Flask REST API"]
+    end
+
+    B -- "rosbridge WebSocket" --> C[rosbridge_server]
+    C -- "pub / sub" --> D((roscore))
+
+    %% ---------- Vehicle ----------
+    subgraph GEM_e2["GEM e2 Vehicle"]
+        D --> E["Exit-Parking<br/>FSM"]
+        D --> F["PID Lane-Follow"]
+        D --> G["LiDAR ROI<br/>Collision-Stop"]
+        D --> H["Arrival Checker"]
+        G -- "/cmd_vel" --> V["Vehicle Base"]
+        V -- "LiDAR scan" --> L["Ouster OS1-128"]
+    end
+
 
 
