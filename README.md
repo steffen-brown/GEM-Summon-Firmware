@@ -46,63 +46,55 @@ The result is a **portable reference design** suitable for many small-EV platfor
 ```mermaid
 %% GEM e2 Summon System – GitHub-safe Mermaid (no :::, no mid-block %%)
 flowchart LR
-  %% ───────── Client side ─────────
-  subgraph Client_Side["Client Side"]
-    direction LR
-    WebApp["Web App<br/>React 18"]
-    WebApp -- "HTTPS + JWT" --> API["Flask REST API"]
-  end
-  API -- "rosbridge WS" --> Bridge[rosbridge_server]
-  Bridge -- "pub / sub" --> Core((roscore))
+    %% ---------- Client side ----------
+    subgraph Client_Side["Client&nbsp;Side"]
+        A["Web&nbsp;App<br/>React 18"]
+        A -- "HTTPS&nbsp;+&nbsp;JWT" --> B["Flask&nbsp;REST&nbsp;API"]
+    end
 
-  %% ───────── Sensors ─────────
-  subgraph Onboard_Sensors["On-board Sensors"]
-    direction TB
-    SC["Stereo Camera"]
-    IMU["IMU"]
-    LIDAR["Ouster OS1-128"]
-    GPS["GPS"]
-  end
+    B -- "rosbridge&nbsp;WebSocket" --> C[rosbridge_server]
+    C -- "pub&nbsp;/&nbsp;sub" --> D((roscore))
 
-  %% ───────── Modules ─────────
-  subgraph Modules["Perception / Control Nodes"]
-    direction TB
-    LF["PID Lane-Follow"]
-    EP["Exit-Parking FSM"]
-    ROI["LiDAR ROI<br/>Collision-Stop"]
-    ARR["Arrival Checker"]
-  end
+    %% ---------- Sensors ----------
+    subgraph Sensors["On-board&nbsp;Sensors"]
+        SC["Stereo&nbsp;Camera"]
+        IMU["IMU"]
+        LIDAR["Ouster&nbsp;OS1-128"]
+        GPS["GPS"]
+    end
 
-  %% ───────── Orchestrator & Actuation ─────────
-  SM["SummonManager"]
-  VB["Vehicle Base<br/>(PACMod)"]
+    %% ---------- Perception / control nodes ----------
+    E["Exit-Parking FSM"]
+    F["PID&nbsp;Lane-Follow"]
+    G["LiDAR ROI<br/>Collision-Stop"]
+    H["Arrival&nbsp;Checker"]
 
-  %% Sensor → module feeds
-  SC --> LF
-  SC --> EP
-  IMU --> EP
-  LIDAR --> ROI
-  GPS --> ARR
-  GPS --> SM
+    %% ---------- Orchestrator ----------
+    SM["SummonManager"]
 
-  %% Module → SummonManager
-  LF -->|LF_OUTPUT| SM
-  EP -->|EP_OUTPUT| SM
-  ROI -->|/OBJECT_DETECTION| SM
-  ARR -->|/ARRIVAL/arrived| SM
+    %% ---------- Actuation ----------
+    VB["Vehicle&nbsp;Base<br/>(PACMod)"]
 
-  %% SummonManager → module activations
-  SM -->|/LANE_DETECTION/active| LF
-  SM -->|/EXIT_PARK/active| EP
+    %% ---------- Data flows ----------
+    D -->|cmd_mux<br/>&amp; state| SM
+    SM -->|/enable, /steer,<br/>/accel, /brake| VB
 
-  %% SummonManager → Vehicle Base
-  SM -->|/pacmod/as_rx/*| VB
+    %% Sensor feeds
+    SC --> E & F
+    IMU --> E
+    LIDAR --> G
+    GPS --> SM & H
 
-  %% Styling
-  classDef orchestrator fill:#d9d9ff,stroke:#333;
-  classDef vehicle fill:#ffd9d9,stroke:#333;
-  class SM orchestrator;
-  class VB vehicle;
+    %% Module outputs to SummonManager
+    E -->|EP_OUTPUT/*| SM
+    F -->|LF_OUTPUT/*| SM
+    G -->|/OBJECT_DETECTION| SM
+    H -->|/ARRIVAL/arrived| SM
+
+    %% Module activations from SummonManager
+    SM -->|/EXIT_PARK/active| E
+    SM -->|/LANE_DETECTION/active| F
+
 
 
 
