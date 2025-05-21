@@ -72,10 +72,10 @@ flowchart LR
     %% ──────────────────────────────────────────────
     subgraph Modules["Perception&nbsp;/&nbsp;Control&nbsp;Nodes"]
         direction TB
-        LF["PID&nbsp;Lane-Follow"]      %% needs Stereo
-        EP["Exit-Parking&nbsp;FSM"]     %% needs Stereo + IMU
-        ROI["LiDAR&nbsp;ROI<br/>Collision-Stop"]  %% needs LiDAR
-        ARR["Arrival&nbsp;Checker"]     %% needs GPS
+        LF["PID&nbsp;Lane-Follow"]   
+        EP["Exit-Parking&nbsp;FSM"]    
+        ROI["LiDAR&nbsp;ROI<br/>Collision-Stop"] 
+        ARR["Arrival&nbsp;Checker"]    
     end
 
     %% ──────────────────────────────────────────────
