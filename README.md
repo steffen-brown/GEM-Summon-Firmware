@@ -95,13 +95,13 @@ flowchart LR
     SM -->|/EXIT_PARK/active| E
     SM -->|/LANE_DETECTION/active| F
 
-### 🧠 SummonManager: Orchestration Logic
+### SummonManager: Orchestration Logic
 
 The `SummonManager` node acts as the central orchestrator, coordinating all autonomous modules based on a finite state machine (FSM). It selectively activates modules, routes PACMod commands, and handles emergency behavior.
 
 ---
 
-#### 🚦 FSM States
+#### FSM States
 
 | State | Name            | Description                                                                  |
 | ----- | --------------- | ---------------------------------------------------------------------------- |
@@ -111,7 +111,7 @@ The `SummonManager` node acts as the central orchestrator, coordinating all auto
 
 ---
 
-### 🔁 Data Flow Summary
+### Data Flow Summary
 
 | Source              | Topic                                 | Role                             |
 | ------------------- | ------------------------------------- | -------------------------------- |
@@ -124,7 +124,7 @@ The `SummonManager` node acts as the central orchestrator, coordinating all auto
 
 ---
 
-### 🧱 Command Multiplexing by FSM State
+### Command Multiplexing by FSM State
 
 ```plaintext
 FSM:        [IDLE]         [EXIT]           [LANE FOLLOW]
@@ -138,7 +138,7 @@ Brake:      1.0 (Full)     EP_BRAKE         LF_BRAKE
 
 ---
 
-### ✅ Activation Logic
+### Activation Logic
 
 ```python
 if fsm_state == 1:
@@ -156,7 +156,7 @@ else:
 
 ---
 
-### 🎯 Arrival Detection
+### Arrival Detection
 
 Vehicle transitions to IDLE and stops when:
 
@@ -167,7 +167,7 @@ These conditions are computed from GPS (`/navsatfix`) and INS heading.
 
 ---
 
-### 🚧 Obstacle Handling
+### Obstacle Handling
 
 ```text
 /OBJECT_DETECTION/stop     → Triggers emergency brake
@@ -175,6 +175,7 @@ These conditions are computed from GPS (`/navsatfix`) and INS heading.
 ```
 
 If an obstacle is detected, SummonManager overrides control and holds full brake. Once cleared, FSM resumes automatically.
+
 
 
 
