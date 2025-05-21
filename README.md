@@ -46,35 +46,54 @@ The result is a **portable reference design** suitable for many small-EV platfor
 ```mermaid
 flowchart LR
     %% ---------- Client side ----------
-    subgraph Client_Side["Client Side"]
+    subgraph Client_Side["Client&nbsp;Side"]
         A["Web&nbsp;App<br/>React 18"]
-        A -- "HTTPS + JWT" --> B["Flask&nbsp;REST&nbsp;API"]
+        A -- "HTTPS&nbsp;+&nbsp;JWT" --> B["Flask&nbsp;REST&nbsp;API"]
     end
 
-    B -- "rosbridge WebSocket" --> C[rosbridge_server]
-    C -- "pub / sub" --> D((roscore))
+    B -- "rosbridge&nbsp;WebSocket" --> C[rosbridge_server]
+    C -- "pub&nbsp;/&nbsp;sub" --> D((roscore))
 
-    %% ---------- Vehicle sensors ----------
-    subgraph Sensors["On-board Sensors"]
+    %% ---------- Sensors ----------
+    subgraph Sensors["On-board&nbsp;Sensors"]
         SC["Stereo&nbsp;Camera"]
         IMU["IMU"]
+        LIDAR["Ouster&nbsp;OS1-128"]
+        GPS["GPS"]
     end
 
-    %% ---------- Vehicle modules ----------
-    subgraph GEM_e2["GEM e2 Vehicle"]
-        D --> E["Exit-Parking<br/>FSM"]
-        D --> F["PID&nbsp;Lane-Follow"]
-        D --> G["LiDAR&nbsp;ROI<br/>Collision-Stop"]
-        D --> H["Arrival&nbsp;Checker"]
+    %% ---------- Perception / control nodes ----------
+    E["Exit-Parking FSM"]
+    F["PID&nbsp;Lane-Follow"]
+    G["LiDAR ROI<br/>Collision-Stop"]
+    H["Arrival&nbsp;Checker"]
 
-        G -- "/cmd_vel" --> V["Vehicle&nbsp;Base"]
-        V -- "LiDAR scan" --> L["Ouster&nbsp;OS1-128"]
-    end
+    %% ---------- Orchestrator ----------
+    SM["SummonManager"]
 
-    %% ---------- Sensor → module dependencies ----------
-    SC --> E
+    %% ---------- Actuation ----------
+    VB["Vehicle&nbsp;Base<br/>(PACMod)"]
+
+    %% ---------- Data flows ----------
+    D -->|cmd_mux<br/>&amp; state| SM
+    SM -->|/enable, /steer,<br/>/accel, /brake| VB
+
+    %% Sensor feeds
+    SC --> E & F
     IMU --> E
-    SC --> F
+    LIDAR --> G
+    GPS --> SM & H
+
+    %% Module outputs to SummonManager
+    E -->|EP_OUTPUT/*| SM
+    F -->|LF_OUTPUT/*| SM
+    G -->|/OBJECT_DETECTION| SM
+    H -->|/ARRIVAL/arrived| SM
+
+    %% Module activations from SummonManager
+    SM -->|/EXIT_PARK/active| E
+    SM -->|/LANE_DETECTION/active| F
+
 
 
 
