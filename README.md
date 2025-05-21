@@ -140,13 +140,6 @@ Activates modules and multiplexes PACMod commands.
 
 ---
 
-### Emergency logic
-
-/OBJECT_DETECTION/stop     → full brake  
-/OBJECT_DETECTION/restart  → resume last state
-
----
-
 ### Data Flow Summary
 
 | Source              | Topic                                 | Role                             |
