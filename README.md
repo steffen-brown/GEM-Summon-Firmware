@@ -47,22 +47,35 @@ The result is a **portable reference design** suitable for many small-EV platfor
 flowchart LR
     %% ---------- Client side ----------
     subgraph Client_Side["Client Side"]
-        A["Web App<br/>React 18"]
-        A -- "HTTPS + JWT" --> B["Flask REST API"]
+        A["Web&nbsp;App<br/>React 18"]
+        A -- "HTTPS + JWT" --> B["Flask&nbsp;REST&nbsp;API"]
     end
 
     B -- "rosbridge WebSocket" --> C[rosbridge_server]
     C -- "pub / sub" --> D((roscore))
 
-    %% ---------- Vehicle ----------
+    %% ---------- Vehicle sensors ----------
+    subgraph Sensors["On-board Sensors"]
+        SC["Stereo&nbsp;Camera"]
+        IMU["IMU"]
+    end
+
+    %% ---------- Vehicle modules ----------
     subgraph GEM_e2["GEM e2 Vehicle"]
         D --> E["Exit-Parking<br/>FSM"]
-        D --> F["PID Lane-Follow"]
-        D --> G["LiDAR ROI<br/>Collision-Stop"]
-        D --> H["Arrival Checker"]
-        G -- "/cmd_vel" --> V["Vehicle Base"]
-        V -- "LiDAR scan" --> L["Ouster OS1-128"]
+        D --> F["PID&nbsp;Lane-Follow"]
+        D --> G["LiDAR&nbsp;ROI<br/>Collision-Stop"]
+        D --> H["Arrival&nbsp;Checker"]
+
+        G -- "/cmd_vel" --> V["Vehicle&nbsp;Base"]
+        V -- "LiDAR scan" --> L["Ouster&nbsp;OS1-128"]
     end
+
+    %% ---------- Sensor → module dependencies ----------
+    SC --> E
+    IMU --> E
+    SC --> F
+
 
 
 
