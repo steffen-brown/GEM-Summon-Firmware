@@ -46,63 +46,64 @@ The result is a **portable reference design** suitable for many small-EV platfor
 ```mermaid
 %% GEM e2 Summon System – GitHub-safe Mermaid (no :::, no mid-block %%)
 flowchart LR
-    %% ───────── Client side ─────────
-    subgraph Client_Side ["Client Side"]
-        direction LR
-        WebApp["Web App<br/>React&nbsp;18"]
-        WebApp -- "HTTPS&nbsp;+&nbsp;JWT" --> API["Flask REST&nbsp;API"]
-    end
-    API -- "rosbridge&nbsp;WS" --> Bridge[rosbridge_server]
-    Bridge -- "pub&nbsp;/&nbsp;sub" --> Core((roscore))
+  %% ───────── Client side ─────────
+  subgraph Client_Side["Client Side"]
+    direction LR
+    WebApp["Web App<br/>React 18"]
+    WebApp -- "HTTPS + JWT" --> API["Flask REST API"]
+  end
+  API -- "rosbridge WS" --> Bridge[rosbridge_server]
+  Bridge -- "pub / sub" --> Core((roscore))
 
-    %% ───────── Sensors ─────────
-    subgraph Onboard_Sensors ["On-board Sensors"]
-        direction TB
-        SC["Stereo Camera"]
-        IMU["IMU"]
-        LIDAR["Ouster OS1-128"]
-        GPS["GPS"]
-    end
+  %% ───────── Sensors ─────────
+  subgraph Onboard_Sensors["On-board Sensors"]
+    direction TB
+    SC["Stereo Camera"]
+    IMU["IMU"]
+    LIDAR["Ouster OS1-128"]
+    GPS["GPS"]
+  end
 
-    %% ───────── Modules ─────────
-    subgraph Modules ["Perception / Control Nodes"]
-        direction TB
-        LF["PID Lane-Follow"]
-        EP["Exit-Parking FSM"]
-        ROI["LiDAR ROI<br/>Collision-Stop"]
-        ARR["Arrival Checker"]
-    end
+  %% ───────── Modules ─────────
+  subgraph Modules["Perception / Control Nodes"]
+    direction TB
+    LF["PID Lane-Follow"]
+    EP["Exit-Parking FSM"]
+    ROI["LiDAR ROI<br/>Collision-Stop"]
+    ARR["Arrival Checker"]
+  end
 
-    %% ───────── Orchestrator & Actuation ─────────
-    SM["SummonManager"]
-    VB["Vehicle Base<br/>(PACMod)"]
+  %% ───────── Orchestrator & Actuation ─────────
+  SM["SummonManager"]
+  VB["Vehicle Base<br/>(PACMod)"]
 
-    %% Sensor → module feeds
-    SC  --> LF
-    SC  --> EP
-    IMU --> EP
-    LIDAR --> ROI
-    GPS --> ARR
-    GPS --> SM
+  %% Sensor → module feeds
+  SC --> LF
+  SC --> EP
+  IMU --> EP
+  LIDAR --> ROI
+  GPS --> ARR
+  GPS --> SM
 
-    %% Module → SummonManager
-    LF  -->|LF_OUTPUT|          SM
-    EP  -->|EP_OUTPUT|          SM
-    ROI -->|/OBJECT_DETECTION|  SM
-    ARR -->|/ARRIVAL/arrived|   SM
+  %% Module → SummonManager
+  LF -->|LF_OUTPUT| SM
+  EP -->|EP_OUTPUT| SM
+  ROI -->|/OBJECT_DETECTION| SM
+  ARR -->|/ARRIVAL/arrived| SM
 
-    %% SummonManager → module activations
-    SM -->|/LANE_DETECTION/active| LF
-    SM -->|/EXIT_PARK/active|     EP
+  %% SummonManager → module activations
+  SM -->|/LANE_DETECTION/active| LF
+  SM -->|/EXIT_PARK/active| EP
 
-    %% SummonManager → Vehicle Base
-    SM -->|/pacmod/as_rx/*| VB
+  %% SummonManager → Vehicle Base
+  SM -->|/pacmod/as_rx/*| VB
 
-    %% ───────── Styling (classic syntax) ─────────
-    classDef orchestrator fill:#d9d9ff,stroke:#333;
-    classDef vehicle      fill:#ffd9d9,stroke:#333;
-    class SM orchestrator;
-    class VB vehicle;
+  %% Styling
+  classDef orchestrator fill:#d9d9ff,stroke:#333;
+  classDef vehicle fill:#ffd9d9,stroke:#333;
+  class SM orchestrator;
+  class VB vehicle;
+
 
 
 
