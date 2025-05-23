@@ -5,10 +5,14 @@
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](#license)
 
 
+<p align="center">
+  <a href="https://youtu.be/guBvMg3KNeQ">
+    <img src="https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg" alt="Watch the Demo" width="720">
+  </a>
+  <br/>
+  <b>📽️ Click the image above to watch the full demonstration on YouTube</b>
+</p>
 
-[![Watch the Demo](https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg)](https://youtu.be/guBvMg3KNeQ)
-
-📽️ Click the image above to watch the full demonstration on YouTube.
 
 
 A full-stack **ROS (Noetic)** system that lets a GEM e2 neighborhood-electric vehicle **drive itself from any parked bay on a closed track to a user-selected GPS waypoint**, while it:
