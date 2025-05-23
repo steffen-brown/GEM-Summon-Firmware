@@ -307,7 +307,9 @@ Then:
 3. Click **Summon** to trigger the full motion pipeline:
    - Exit Parking → Lane Follow → Obstacle Avoidance → Arrival
 
+## 🎥 Demonstrations
 
+📽️ [Click to watch the full demo video](videos/summon_demo.mp4)
 
 
 
