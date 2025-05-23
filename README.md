@@ -299,7 +299,7 @@ Stops all background nodes cleanly.
 Open your browser and go to:
 
 ```bash
-http://localhost:5000
+https://gem-summon-frontend.onrender.com/
 ```
 
 Then:
