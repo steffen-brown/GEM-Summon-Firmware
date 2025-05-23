@@ -19,13 +19,12 @@ Project by **Neel Patel, Pusan Chakraborty, Rohith Madhavan, Steffen Brown** (UI
 1. [Project Motivation](#project-motivation)  
 2. [System Architecture](#system-architecture)  
 3. [Key Algorithms](#key-algorithms)  
-4. [Quick Start](#quick-start)  
-5. [Repository Layout](#repository-layout)  
-6. [Demonstrations](#demonstrations)  
-7. [Results & Metrics](#results--metrics)  
-8. [Challenges & Lessons Learned](#challenges--lessons-learned)  
-9. [Contributors](#contributors)  
-10. [License](#license)  
+4. [Quick Start](#quick-start) 
+5. [Demonstrations](#demonstrations)  
+6. [Results & Metrics](#results--metrics)  
+7. [Challenges & Lessons Learned](#challenges--lessons-learned)  
+8. [Contributors](#contributors)  
+9. [License](#license)  
 
 ---
 
