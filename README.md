@@ -22,9 +22,8 @@ Project by **Neel Patel, Pusan Chakraborty, Rohith Madhavan, Steffen Brown** (UI
 4. [Quick Start](#quick-start) 
 5. [Demonstrations](#demonstrations)  
 6. [Results & Metrics](#results--metrics)  
-7. [Challenges & Lessons Learned](#challenges--lessons-learned)  
-8. [Contributors](#contributors)  
-9. [License](#license)  
+7. [Contributors](#contributors)  
+8. [License](#license)  
 
 ---
 
