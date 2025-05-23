@@ -234,6 +234,82 @@ cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
 
+### 🧪 Runtime: 4-Terminal Setup
+
+>  **Before You Begin**
+>
+> - Restart the **Flask API** and wait **~60 seconds** for initialization.  
+> - Confirm GPS location is correct on the **Summon web interface**.  
+> - Then, **log in** and click **Summon** when ready.
+
+---
+
+### 🖥️ Terminal 1 — Launch Sensors
+
+```bash
+roslaunch basic_launch sensor_init.launch
+```
+
+Initializes LiDAR, GPS, IMU, and stereo camera nodes.
+
+---
+
+## 🖥️ Terminal 2 — Activate Joystick Mode
+
+```bash
+roslaunch basic_launch dbw_joystick.launch
+```
+
+Enables joystick-based drive-by-wire control.
+
+---
+
+## 🖥️ Terminal 3 — Run Summon Nodes
+
+```bash
+cd ~/catkin_ws/src/ece484-final/GEM\ Code/src/vehicle_drivers/summon/launch
+./run_nodes.sh
+```
+
+This script launches all core ROS nodes (with 2s spacing):
+
+- `summon_manager.py`  
+- `lane_detection.py`  
+- `object_avoidance.py`  
+- `networking_node.py`  
+- `arrive.py`  
+- `exit_parking.py`  
+- `lf_pid.py`
+
+---
+
+### 🛑 Terminal 4 — Kill All Nodes (When Done)
+
+```bash
+cd ~/catkin_ws/src/ece484-final/GEM\ Code/src/vehicle_drivers/summon/launch
+./kill_nodes.sh
+```
+
+Stops all background nodes cleanly.
+
+---
+
+## 🌐 Web Interface
+
+Open your browser and go to:
+
+```bash
+http://localhost:5000
+```
+
+Then:
+
+1. **Log in** with your credentials  
+2. Verify GPS fix is accurate on the map  
+3. Click **Summon** to trigger the full motion pipeline:
+   - Exit Parking → Lane Follow → Obstacle Avoidance → Arrival
+
+
 
 
 
