@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://youtu.be/guBvMg3KNeQ">
-    <img src="https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg" alt="Watch the Demo">
+    <img src="https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg" alt="Watch the Demo" height = "720">
   </a>
   <br/>
   <b>📽️ Click the image above to watch the full demonstration on YouTube</b>
