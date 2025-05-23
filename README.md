@@ -32,9 +32,8 @@ Project by **Neel Patel, Pusan Chakraborty, Rohith Madhavan, Steffen Brown** (UI
 3. [Key Algorithms](#key-algorithms)  
 4. [Quick Start](#quick-start) 
 5. [Demonstrations](#demonstrations)  
-6. [Results & Metrics](#results--metrics)  
-7. [Contributors](#contributors)  
-8. [License](#license)  
+6. [Results & Metrics](#results--metrics)   
+7. [License](#license)  
 
 ---
 
@@ -318,9 +317,7 @@ Then:
 3. Click **Summon** to trigger the full motion pipeline:
    - Exit Parking → Lane Follow → Obstacle Avoidance → Arrival
 
-## 🎥 Demonstrations
 
-📽️ [Click to watch the full demo video](videos/summon_demo.mp4)
 
 
 
