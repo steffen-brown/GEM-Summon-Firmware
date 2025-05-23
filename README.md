@@ -5,10 +5,13 @@
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](#license)
 
 
-[![Watch the Demo](https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg)](https://youtu.be/guBvMg3KNeQ)
-
-📽️ Click the image above to watch the full demonstration on YouTube.
-
+<p align="center">
+  <a href="https://youtu.be/guBvMg3KNeQ">
+    <img src="https://img.youtube.com/vi/guBvMg3KNeQ/0.jpg" alt="Watch the Demo" width="720">
+  </a>
+  <br/>
+  <b>📽️ Click the image above to watch the full demonstration on YouTube</b>
+</p>
 
 
 
