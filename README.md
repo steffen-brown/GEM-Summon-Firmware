@@ -205,7 +205,34 @@ These conditions are computed from GPS (`/navsatfix`) and INS heading.
 
 If an obstacle is detected, SummonManager overrides control and holds full brake. Once cleared, FSM resumes automatically.
 
-## Quick Start
+## 🚀 Quick Start
+
+### ✅ Requirements
+
+- **OS**: Ubuntu 20.04  
+- **ROS**: Noetic Ninjemys  
+- **Python**: 3.8  
+- **Hardware**: GEM e2 (PACMod enabled), Ouster OS1-128, GPS, IMU, Stereo camera
+
+---
+
+### 🧰 Installation
+
+```bash
+# Install ROS Noetic
+sudo apt update
+sudo apt install ros-noetic-desktop-full
+
+# Source ROS
+echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# Clone and build the workspace
+mkdir -p ~/catkin_ws/src && cd ~/catkin_ws/src
+git clone https://github.com/steffen-brown/ece484-final.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
 
 
 
