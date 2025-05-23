@@ -302,7 +302,7 @@ Stops all background nodes cleanly.
 
 ---
 
-## 🌐 Web Interface
+### 🌐 Web Interface
 
 Open your browser and go to:
 
@@ -318,10 +318,38 @@ Then:
    - Exit Parking → Lane Follow → Obstacle Avoidance → Arrival
 
 
+## Results & Metrics
+Exit Parking
+PID-based heading control
+
+Lateral error: less than 0.10 m (consistent exits)
+
+### Lane Following
+RMS error: 0.07 m (straight), 0.15 m (curved)
+
+Tuned PID controller for stable tracking
+
+### Obstacle Avoidance
+LiDAR ROI: 0.5 m < x < 5 m, y < 1 m, ring 62–128
+
+Obstacle threshold: 50 points  with 100% stop success
+
+### Summon Arrival
+Stops within 4 m of the target & aligned within 15°
+
+10/10 runs successfully
+
+### Full Run Tests
+All FSM transitions are stable
+
+5/5 full-track summon tasks completed
 
 
 
+##  License
 
+This project was developed as part of ECE 484: Principles of Safe Autonomy at the University of Illinois Urbana-Champaign.  
+It is provided for academic and non-commercial use only. No warranties or guarantees are provided.
 
 
 
