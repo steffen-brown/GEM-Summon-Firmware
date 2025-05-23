@@ -4,6 +4,10 @@
 [![ROS Noetic](https://img.shields.io/badge/ROS-Noetic-blue)](http://wiki.ros.org/noetic)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](#license)
 
+
+
+
+
 A full-stack **ROS (Noetic)** system that lets a GEM e2 neighborhood-electric vehicle **drive itself from any parked bay on a closed track to a user-selected GPS waypoint**, while it:
 
 * **Exits parking bays** autonomously  
