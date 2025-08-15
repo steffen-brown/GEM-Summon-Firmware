@@ -26,6 +26,16 @@ Project by **Neel Patel, Pusan Chakraborty, Rohith Madhavan, Steffen Brown** (UI
 
 ---
 
+## Contribution
+This project was developed as part of an academic course with significant contributions by Steffen Brown, who implemented:
+- **ROS Node Architecture & Orchestration**: Full design and implementation of the SummonManager FSM for state transitions and ROS topic multiplexing.
+- **Networking / API Integration**: Full development of ROS nodes for backend API communication, including receiving summon locations and sending vehicle status updates.
+- **Hardware Integration & PACMod Control**: Full implementation of PACMod-based steering, acceleration, braking, and gear control within ROS.
+- **Collaborative Development**: Exit-Parking Module, Lane-Follow Module, LiDAR ROI Collision-Stop Module, and Arrival Checker.
+- **Testing & Tuning**: Collaborative on-vehicle testing, controller parameter tuning, and validation of full summon runs.
+
+---
+
 ## 📑 Table of Contents
 1. [Project Motivation](#project-motivation)  
 2. [System Architecture](#system-architecture)  
